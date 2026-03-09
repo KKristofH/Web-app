@@ -1,4 +1,4 @@
-const CACHE_NAME = 'galeria-cache-v7';
+const CACHE_NAME = 'galeria-cache-v8';
 const urlsToCache = [
   './',
   './index.html',
@@ -7,6 +7,7 @@ const urlsToCache = [
 ];
 
 self.addEventListener('install', event => {
+  self.skipWaiting(); // Azonnal átveszi az irányítást
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => {
@@ -35,6 +36,6 @@ self.addEventListener('activate', event => {
           }
         })
       );
-    })
+    }).then(() => self.clients.claim())
   );
 });

@@ -36,7 +36,6 @@
         .gallery-actions { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); width: 90%; max-width: 450px; display: flex; gap: 10px; z-index: 100; }
         #status-msg { color: var(--success); font-size: 14px; margin-top: 10px; height: 20px; }
 
-        /* Letisztult teljes képernyős nézet (Gombok és nyilak NÉLKÜL) */
         #fullscreen-view { 
             position: fixed; 
             top: 0; left: 0; 
@@ -126,7 +125,6 @@
     request.onupgradeneeded = (e) => {
         let db = e.target.result;
         if (!db.objectStoreNames.contains('images')) {
-            // Nem nyúlunk a régi struktúrához, hogy kompatibilis maradjon a meglévő képekkel
             db.createObjectStore('images', { autoIncrement: true });
         }
     };
@@ -230,49 +228,66 @@
         showView('menu-view');
     }
 
-    // --- JAVÍTOTT ADATBÁZIS OLVASÁS (Törlés problémájának megoldása) ---
-    async function openGallery() {
+    // --- JAVÍTOTT, SZINKRON ADATOLVASÁS ---
+    function openGallery() {
         showView('gallery-view');
         const container = document.getElementById('gallery-container');
-        container.innerHTML = '<p>Dekódolás...</p>';
+        container.innerHTML = '<p>Adatok olvasása...</p>';
         updateDeleteBtn();
         currentGalleryImages = []; 
 
         const transaction = db.transaction(['images'], 'readonly');
         const store = transaction.objectStore('images');
-        // A getAll() helyett Cursor-t használunk, ami ki tudja olvasni a rejtett ID-kat is
         const cursorRequest = store.openCursor();
+        
+        // Először kiolvasunk minden kódolt adatot a memóriába (hogy ne szakadjon meg a kapcsolat)
+        const encryptedRecords = [];
 
-        let hasImages = false;
-        container.innerHTML = '';
-
-        cursorRequest.onsuccess = async (e) => {
+        cursorRequest.onsuccess = (e) => {
             const cursor = e.target.result;
             if (cursor) {
-                hasImages = true;
-                const dbKey = cursor.key; // <-- EZ A KULCS kellett a törléshez!
-                const imgObj = cursor.value;
-                const base64 = await decryptData(imgObj, sessionKey);
-                
-                if (base64) {
-                    const index = currentGalleryImages.length;
-                    currentGalleryImages.push(base64); 
-                    
-                    const card = document.createElement('div');
-                    card.className = 'img-card';
-                    card.innerHTML = `
-                        <input type="checkbox" value="${dbKey}" onchange="updateDeleteBtn()">
-                        <img src="${base64}" onclick="openFullscreen(${index})">
-                    `;
-                    container.appendChild(card);
-                }
-                cursor.continue(); // Ugrás a következő képre az adatbázisban
+                encryptedRecords.push({
+                    key: cursor.key,
+                    value: cursor.value
+                });
+                cursor.continue(); // Szinkron ugrás a következőre
             } else {
-                if (!hasImages) {
-                    container.innerHTML = '<p style="grid-column: span 2;">Üres a galéria.</p>';
-                }
+                // Ha a kurzor végigért, jöhet a dekódolás!
+                processAndRenderImages(encryptedRecords, container);
             }
         };
+    }
+
+    // A dekódolás már az adatbázis kapcsolat lezárulása után történik
+    async function processAndRenderImages(records, container) {
+        container.innerHTML = '';
+
+        if (records.length === 0) {
+            container.innerHTML = '<p style="grid-column: span 2;">Üres a galéria.</p>';
+            return;
+        }
+
+        container.innerHTML = '<p id="loading-text" style="grid-column: span 2;">Képek dekódolása...</p>';
+
+        for (let record of records) {
+            const base64 = await decryptData(record.value, sessionKey);
+            
+            if (base64) {
+                const index = currentGalleryImages.length;
+                currentGalleryImages.push(base64); 
+                
+                const card = document.createElement('div');
+                card.className = 'img-card';
+                card.innerHTML = `
+                    <input type="checkbox" value="${record.key}" onchange="updateDeleteBtn()">
+                    <img src="${base64}" onclick="openFullscreen(${index})">
+                `;
+                container.appendChild(card);
+            }
+        }
+        
+        const loadingText = document.getElementById('loading-text');
+        if(loadingText) loadingText.remove();
     }
 
     function updateDeleteBtn() {
@@ -294,7 +309,7 @@
         const store = transaction.objectStore('images');
 
         selected.forEach(cb => {
-            store.delete(Number(cb.value)); // Most már biztosan valós ID-t kap
+            store.delete(Number(cb.value)); 
         });
 
         transaction.oncomplete = () => {

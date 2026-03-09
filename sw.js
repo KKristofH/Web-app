@@ -1,9 +1,10 @@
-const CACHE_NAME = 'galeria-cache-v11';
+const CACHE_NAME = 'galeria-cache-v12';
 const urlsToCache = [
   './',
   './index.html',
   './manifest.json',
-  './sw.js'
+  './sw.js',
+  './appstore.png'
 ];
 
 self.addEventListener('install', event => {

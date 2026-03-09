@@ -36,7 +36,7 @@
         .gallery-actions { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); width: 90%; max-width: 450px; display: flex; gap: 10px; z-index: 100; }
         #status-msg { color: var(--success); font-size: 14px; margin-top: 10px; height: 20px; }
 
-        /* --- TISZTÍTOTT, KÖZÉPRE ZÁRT TELJES KÉPERNYŐS NÉZET --- */
+        /* Letisztult teljes képernyős nézet (Gombok és nyilak NÉLKÜL) */
         #fullscreen-view { 
             position: fixed; 
             top: 0; left: 0; 
@@ -46,11 +46,10 @@
             display: none; 
             align-items: center; 
             justify-content: center; 
-            overflow: hidden; /* Megakadályozza a görgetést kicsúszás esetén */
+            overflow: hidden; 
         }
         #fullscreen-view.active { display: flex; }
         
-        /* Tökéletes illeszkedés a rendelkezésre álló helyhez */
         #fs-img { 
             max-width: 100%; 
             max-height: 100%; 
@@ -127,7 +126,8 @@
     request.onupgradeneeded = (e) => {
         let db = e.target.result;
         if (!db.objectStoreNames.contains('images')) {
-            db.createObjectStore('images', { keyPath: "id", autoIncrement: true });
+            // Nem nyúlunk a régi struktúrához, hogy kompatibilis maradjon a meglévő képekkel
+            db.createObjectStore('images', { autoIncrement: true });
         }
     };
     request.onsuccess = (e) => { db = e.target.result; };
@@ -230,6 +230,7 @@
         showView('menu-view');
     }
 
+    // --- JAVÍTOTT ADATBÁZIS OLVASÁS (Törlés problémájának megoldása) ---
     async function openGallery() {
         showView('gallery-view');
         const container = document.getElementById('gallery-container');
@@ -238,19 +239,21 @@
         currentGalleryImages = []; 
 
         const transaction = db.transaction(['images'], 'readonly');
-        const request = transaction.objectStore('images').getAll();
+        const store = transaction.objectStore('images');
+        // A getAll() helyett Cursor-t használunk, ami ki tudja olvasni a rejtett ID-kat is
+        const cursorRequest = store.openCursor();
 
-        request.onsuccess = async (e) => {
-            const images = e.target.result;
-            container.innerHTML = '';
+        let hasImages = false;
+        container.innerHTML = '';
 
-            if (!images.length) {
-                container.innerHTML = '<p style="grid-column: span 2;">Üres a galéria.</p>';
-                return;
-            }
-
-            for (let imgObj of images) {
+        cursorRequest.onsuccess = async (e) => {
+            const cursor = e.target.result;
+            if (cursor) {
+                hasImages = true;
+                const dbKey = cursor.key; // <-- EZ A KULCS kellett a törléshez!
+                const imgObj = cursor.value;
                 const base64 = await decryptData(imgObj, sessionKey);
+                
                 if (base64) {
                     const index = currentGalleryImages.length;
                     currentGalleryImages.push(base64); 
@@ -258,10 +261,15 @@
                     const card = document.createElement('div');
                     card.className = 'img-card';
                     card.innerHTML = `
-                        <input type="checkbox" value="${imgObj.id}" onchange="updateDeleteBtn()">
+                        <input type="checkbox" value="${dbKey}" onchange="updateDeleteBtn()">
                         <img src="${base64}" onclick="openFullscreen(${index})">
                     `;
                     container.appendChild(card);
+                }
+                cursor.continue(); // Ugrás a következő képre az adatbázisban
+            } else {
+                if (!hasImages) {
+                    container.innerHTML = '<p style="grid-column: span 2;">Üres a galéria.</p>';
                 }
             }
         };
@@ -286,7 +294,7 @@
         const store = transaction.objectStore('images');
 
         selected.forEach(cb => {
-            store.delete(Number(cb.value));
+            store.delete(Number(cb.value)); // Most már biztosan valós ID-t kap
         });
 
         transaction.oncomplete = () => {

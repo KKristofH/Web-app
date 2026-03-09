@@ -9,7 +9,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Galéria">
-    <link rel="apple-touch-icon" href="https://upload.wikimedia.org/wikipedia/commons/thumb/1/18/Apple_logo_black.svg/1024px-Apple_logo_black.svg.png">
+    <link rel="apple-touch-icon" href="./appstore.png">
     
     <style>
         :root { --bg: #121212; --card: #1e1e1e; --text: #ffffff; --primary: #0a84ff; --danger: #ff453a; --success: #32d74b; --warning: #ff9f0a; }
@@ -320,7 +320,6 @@
         if(loadingText) loadingText.remove();
     }
 
-    // Gombok frissítése a kijelölés alapján
     function updateSelectionBtns() {
         const selected = document.querySelectorAll('#gallery-container input:checked');
         const delBtn = document.getElementById('delete-btn');
@@ -346,7 +345,6 @@
         const store = transaction.objectStore('images');
         let exportData = [];
 
-        // Kinyerjük a nyers, titkosított rekordokat az adatbázisból
         for (let cb of selected) {
             const id = Number(cb.value);
             await new Promise(resolve => {
@@ -358,11 +356,9 @@
             });
         }
 
-        // Fájlba csomagolás
         const blob = new Blob([JSON.stringify(exportData)], { type: 'application/json' });
         const file = new File([blob], 'titkositott_kepek.json', { type: 'application/json' });
 
-        // iOS Share Sheet indítása
         if (navigator.canShare && navigator.canShare({ files: [file] })) {
             navigator.share({
                 files: [file],
@@ -370,7 +366,6 @@
                 text: 'Ezek a képek titkosítva lettek.'
             }).catch(err => console.log('Megosztás megszakítva', err));
         } else {
-            // Letöltés, ha a megosztás nem támogatott
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
@@ -379,7 +374,6 @@
             URL.revokeObjectURL(url);
         }
         
-        // Kijelölések megszüntetése küldés után
         document.querySelectorAll('#gallery-container input:checked').forEach(cb => cb.checked = false);
         updateSelectionBtns();
     }
@@ -424,14 +418,12 @@
         for (let record of pendingImportData) {
             let dataToDecrypt = record;
             if (record.version === 2) {
-                dataToDecrypt = record.full; // V2-nél a teljes képet fejtjük vissza, hogy újra tudjuk generálni
+                dataToDecrypt = record.full; 
             }
 
-            // 1. Feloldás a feladó jelszavával
             const base64Full = await decryptData(dataToDecrypt, senderPin);
 
             if (base64Full) {
-                // SIKER! 2. Újratitkosítás a mi jelszavunkkal
                 const thumbBase64 = await generateThumbnail(base64Full);
                 const encryptedFull = await encryptData(base64Full, sessionKey);
                 const encryptedThumb = await encryptData(thumbBase64, sessionKey);
@@ -442,7 +434,6 @@
                     thumb: encryptedThumb
                 };
 
-                // Mentés a saját adatbázisba
                 await new Promise(resolve => {
                     const transaction = db.transaction(['images'], 'readwrite');
                     transaction.objectStore('images').add(payload);

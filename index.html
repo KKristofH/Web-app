@@ -15,7 +15,6 @@
         :root { --bg: #121212; --card: #1e1e1e; --text: #ffffff; --primary: #0a84ff; --danger: #ff453a; --success: #32d74b; }
         body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 20px; text-align: center; }
         
-        /* Gombok véletlen nagyításának megakadályozása dupla kattintáskor */
         button, input { touch-action: manipulation; }
 
         .view { display: none; max-width: 500px; margin: 0 auto; padding-top: 20px; }
@@ -37,32 +36,30 @@
         .gallery-actions { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); width: 90%; max-width: 450px; display: flex; gap: 10px; z-index: 100; }
         #status-msg { color: var(--success); font-size: 14px; margin-top: 10px; height: 20px; }
 
-        /* --- FRISSÍTETT TELJES KÉPERNYŐS NÉZET --- */
+        /* --- TISZTÍTOTT, KÖZÉPRE ZÁRT TELJES KÉPERNYŐS NÉZET --- */
         #fullscreen-view { 
             position: fixed; 
             top: 0; left: 0; 
             width: 100%; height: 100%; 
-            background: rgba(0,0,0,1); 
+            background: #000000; 
             z-index: 200; 
             display: none; 
             align-items: center; 
             justify-content: center; 
+            overflow: hidden; /* Megakadályozza a görgetést kicsúszás esetén */
         }
         #fullscreen-view.active { display: flex; }
         
-        /* A kép mostantól 100%-os teret kap */
+        /* Tökéletes illeszkedés a rendelkezésre álló helyhez */
         #fs-img { 
-            position: absolute;
-            top: 0; left: 0;
-            width: 100%; height: 100%; 
+            max-width: 100%; 
+            max-height: 100%; 
             object-fit: contain; 
             z-index: 201;
         }
 
-        /* A gombok a kép felett lebegnek */
         .fs-close { 
             position: absolute; 
-            /* Figyelembe veszi az iPhone notch-ot */
             top: calc(env(safe-area-inset-top, 20px) + 10px); 
             right: 20px; 
             background: rgba(255,255,255,0.2); 
@@ -71,15 +68,6 @@
             cursor: pointer; z-index: 203; 
             display: flex; align-items: center; justify-content: center; padding: 0;
         }
-        .fs-btn { 
-            position: absolute;
-            top: 50%; transform: translateY(-50%);
-            background: rgba(0,0,0,0.5); border: none; color: white; 
-            font-size: 30px; padding: 15px 20px; cursor: pointer; z-index: 202; 
-            border-radius: 10px; width: auto;
-        }
-        .fs-btn.prev { left: 10px; }
-        .fs-btn.next { right: 10px; }
     </style>
 </head>
 <body>
@@ -120,9 +108,7 @@
 
     <div id="fullscreen-view">
         <button class="fs-close" onclick="closeFullscreen()">✕</button>
-        <button class="fs-btn prev" onclick="prevFsImage()">❮</button>
         <img id="fs-img" src="">
-        <button class="fs-btn next" onclick="nextFsImage()">❯</button>
     </div>
 
 <script>
@@ -309,7 +295,7 @@
         };
     }
 
-    // --- TELJES KÉPERNYŐS NÉZET, LAPOZÁS ÉS SWIPE LOGIKA ---
+    // --- TELJES KÉPERNYŐS NÉZET ÉS SWIPE LOGIKA ---
     function openFullscreen(index) {
         currentImgIndex = index;
         document.getElementById('fs-img').src = currentGalleryImages[currentImgIndex];
@@ -337,7 +323,6 @@
         }
     }
 
-    // Biztonságos swipe figyelés, ami nem zavar be a zoomolásba
     let touchstartX = 0;
     let touchendX = 0;
     let isZooming = false;
@@ -346,7 +331,7 @@
 
     fsView.addEventListener('touchstart', e => {
         if(e.touches.length > 1) {
-            isZooming = true; // Ha több ujjal ér hozzá, akkor zoomol
+            isZooming = true; 
         } else {
             isZooming = false;
             touchstartX = e.changedTouches[0].screenX;
@@ -354,7 +339,6 @@
     }, {passive: true});
 
     fsView.addEventListener('touchend', e => {
-        // Csak akkor lapoz, ha befejezte a húzást, és nem zoomolt közben
         if(!isZooming && e.changedTouches.length === 1) {
             touchendX = e.changedTouches[0].screenX;
             if (touchendX < touchstartX - 40) nextFsImage(); 

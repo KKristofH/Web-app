@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Titkos Galéria</title>
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Galéria">
+    
+    <style>
+        :root { --bg: #121212; --card: #1e1e1e; --text: #ffffff; --primary: #0a84ff; --danger: #ff453a; }
+        body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 20px; text-align: center; }
+        .view { display: none; max-width: 500px; margin: 0 auto; padding-top: 20px; }
+        .active { display: block; }
+        h1 { font-size: 24px; margin-bottom: 20px; }
+        input[type="password"] { width: 100%; padding: 15px; font-size: 20px; text-align: center; border-radius: 10px; border: none; box-sizing: border-box; margin-bottom: 15px; background: #333; color: white; }
+        button { background: var(--primary); color: white; border: none; padding: 15px; border-radius: 10px; width: 100%; font-size: 16px; font-weight: bold; margin-bottom: 10px; cursor: pointer; }
+        button.secondary { background: #333; }
+        button.danger { background: var(--danger); }
+        .file-upload-wrapper { position: relative; overflow: hidden; display: inline-block; width: 100%; margin-bottom: 15px; }
+        .file-upload-wrapper input[type=file] { font-size: 100px; position: absolute; left: 0; top: 0; opacity: 0; cursor: pointer; height: 100%; }
+        .file-upload-btn { background: var(--primary); color: white; padding: 15px; border-radius: 10px; font-size: 16px; font-weight: bold; display: block; width: 100%; box-sizing: border-box; }
+        #gallery-container { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
+        #gallery-container img { width: 100%; height: 150px; object-fit: cover; border-radius: 10px; border: 1px solid #333; }
+        #status-msg { color: #32d74b; font-size: 14px; margin-top: 10px; height: 20px; }
+    </style>
+</head>
+<body>
+
+    <div id="login-view" class="view active">
+        <h1>🔒 Titkos Galéria</h1>
+        <p id="login-text">Add meg a jelszavad</p>
+        <input type="password" id="pin-input" placeholder="Jelszó...">
+        <button onclick="login()">Belépés</button>
+        <div id="status-msg"></div>
+    </div>
+
+    <div id="menu-view" class="view">
+        <h1>Főmenü</h1>
+        <button onclick="showView('upload-view')">📸 Új kép hozzáadása</button>
+        <button onclick="openGallery()">🖼️ Képek megtekintése</button>
+        <button class="danger" onclick="logout()">Kijelentkezés</button>
+    </div>
+
+    <div id="upload-view" class="view">
+        <h1>Kép titkosítása</h1>
+        <div class="file-upload-wrapper">
+            <button class="file-upload-btn">Kiválasztás vagy Fotózás</button>
+            <input type="file" accept="image/*" id="image-input" onchange="handleImage(event)">
+        </div>
+        <p id="upload-status" style="font-size: 14px; color: gray;">Várakozás képre...</p>
+        <button class="secondary" onclick="showView('menu-view')">Vissza a menübe</button>
+    </div>
+
+    <div id="gallery-view" class="view">
+        <h1>Titkos Képeim</h1>
+        <div id="gallery-container"></div>
+        <button class="secondary" onclick="showView('menu-view')">Vissza a menübe</button>
+    </div>
+
+<script>
+    // --- ÁLLAPOT ÉS ADATBÁZIS ---
+    let sessionKey = null; // A memóriában tartott AES kulcs
+    let db;
+
+    // IndexedDB inicializálása
+    const request = indexedDB.open("SecureGalleryDB", 1);
+    request.onupgradeneeded = (e) => {
+        let db = e.target.result;
+        if (!db.objectStoreNames.contains('images')) {
+            db.createObjectStore('images', { autoIncrement: true });
+        }
+    };
+    request.onsuccess = (e) => { db = e.target.result; };
+    request.onerror = (e) => { console.error("Adatbázis hiba:", e); };
+
+    // --- KRIPTOGRÁFIAI FUNKCIÓK (Web Crypto API) ---
+    
+    // Jelszóból titkosítási kulcs generálása (PBKDF2)
+    async function deriveKey(password, salt) {
+        const enc = new TextEncoder();
+        const keyMaterial = await crypto.subtle.importKey("raw", enc.encode(password), {name: "PBKDF2"}, false, ["deriveBits", "deriveKey"]);
+        return crypto.subtle.deriveKey(
+            { name: "PBKDF2", salt: salt, iterations: 100000, hash: "SHA-256" },
+            keyMaterial, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]
+        );
+    }
+
+    // Szöveg (Base64 kép) titkosítása
+    async function encryptData(dataString, password) {
+        const salt = crypto.getRandomValues(new Uint8Array(16));
+        const iv = crypto.getRandomValues(new Uint8Array(12));
+        const key = await deriveKey(password, salt);
+        const enc = new TextEncoder();
+        const encrypted = await crypto.subtle.encrypt({name: "AES-GCM", iv: iv}, key, enc.encode(dataString));
+        return { salt: salt, iv: iv, data: new Uint8Array(encrypted) };
+    }
+
+    // Titkosított adat visszafejtése
+    async function decryptData(encryptedObj, password) {
+        try {
+            const key = await deriveKey(password, encryptedObj.salt);
+            const decrypted = await crypto.subtle.decrypt({name: "AES-GCM", iv: encryptedObj.iv}, key, encryptedObj.data);
+            const dec = new TextDecoder();
+            return dec.decode(decrypted);
+        } catch (e) {
+            return null; // Hibás jelszó esetén null-t ad vissza
+        }
+    }
+
+    // --- UI ÉS LOGIKA ---
+
+    window.onload = () => {
+        if(!localStorage.getItem('appSetup')) {
+            document.getElementById('login-text').innerText = "Hozd létre a mesterjelszavad";
+        }
+    };
+
+    function showView(viewId) {
+        document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
+        document.getElementById(viewId).classList.add('active');
+    }
+
+    function showStatus(msg, isError = false) {
+        const el = document.getElementById('status-msg');
+        el.style.color = isError ? 'var(--danger)' : '#32d74b';
+        el.innerText = msg;
+        setTimeout(() => el.innerText = "", 3000);
+    }
+
+    async function login() {
+        const pin = document.getElementById('pin-input').value;
+        if (!pin) return showStatus("Írj be egy jelszót!", true);
+
+        if (!localStorage.getItem('appSetup')) {
+            // Első belépés: ellenőrző kód titkosítása a jelszóval
+            const verificationToken = await encryptData("OK", pin);
+            localStorage.setItem('appSetup', JSON.stringify({
+                salt: Array.from(verificationToken.salt),
+                iv: Array.from(verificationToken.iv),
+                data: Array.from(verificationToken.data)
+            }));
+            sessionKey = pin;
+            document.getElementById('pin-input').value = '';
+            showView('menu-view');
+        } else {
+            // Normál belépés: teszteljük a jelszót az ellenőrző kódon
+            const savedToken = JSON.parse(localStorage.getItem('appSetup'));
+            const verifyObj = {
+                salt: new Uint8Array(savedToken.salt),
+                iv: new Uint8Array(savedToken.iv),
+                data: new Uint8Array(savedToken.data)
+            };
+            const result = await decryptData(verifyObj, pin);
+            
+            if (result === "OK") {
+                sessionKey = pin; // Jelszó megjegyzése a munkamenetre
+                document.getElementById('pin-input').value = '';
+                showView('menu-view');
+            } else {
+                showStatus("Hibás jelszó!", true);
+            }
+        }
+    }
+
+    function logout() {
+        sessionKey = null; // Kulcs törlése a memóriából
+        document.getElementById('gallery-container').innerHTML = ''; // Galéria ürítése
+        showView('login-view');
+        showStatus("Sikeresen kijelentkeztél.");
+    }
+
+    // --- KÉPFELDOLGOZÁS ---
+
+    async function handleImage(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        
+        document.getElementById('upload-status').innerText = "Titkosítás folyamatban...";
+        
+        const reader = new FileReader();
+        reader.onload = async function(e) {
+            const base64Image = e.target.result;
+            
+            // Kép titkosítása a memóriában lévő jelszóval
+            const encryptedPayload = await encryptData(base64Image, sessionKey);
+            
+            // Titkosított adat mentése IndexedDB-be
+            const transaction = db.transaction(['images'], 'readwrite');
+            const store = transaction.objectStore('images');
+            store.add(encryptedPayload);
+
+            transaction.oncomplete = () => {
+                document.getElementById('upload-status').innerText = "Várakozás képre...";
+                document.getElementById('image-input').value = ''; // Input reset
+                showView('menu-view');
+                alert("A kép sikeresen kódolva és elmentve!");
+            };
+        };
+        reader.readAsDataURL(file); // Kép beolvasása Base64 formátumba
+    }
+
+    async function openGallery() {
+        showView('gallery-view');
+        const container = document.getElementById('gallery-container');
+        container.innerHTML = '<p>Képek dekódolása...</p>';
+
+        const transaction = db.transaction(['images'], 'readonly');
+        const store = transaction.objectStore('images');
+        const request = store.getAll();
+
+        request.onsuccess = async (e) => {
+            const encryptedImages = e.target.result;
+            container.innerHTML = ''; // Betöltő szöveg törlése
+
+            if (encryptedImages.length === 0) {
+                container.innerHTML = '<p style="grid-column: span 2;">Még nincsenek képek.</p>';
+                return;
+            }
+
+            for (let encryptedObj of encryptedImages) {
+                // Visszafejtés valós időben
+                const base64Image = await decryptData(encryptedObj, sessionKey);
+                if (base64Image) {
+                    const img = document.createElement('img');
+                    img.src = base64Image;
+                    container.appendChild(img);
+                } else {
+                    console.error("Egy képet nem sikerült visszafejteni.");
+                }
+            }
+        };
+    }
+</script>
+
+</body>
+</html>

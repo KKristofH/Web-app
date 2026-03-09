@@ -1,4 +1,4 @@
-const CACHE_NAME = 'galeria-cache-v4';
+const CACHE_NAME = 'galeria-cache-v5';
 const urlsToCache = [
   './',
   './index.html',

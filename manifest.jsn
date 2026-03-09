@@ -1,0 +1,15 @@
+{
+  "name": "Titkos Galéria",
+  "short_name": "Galéria",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#121212",
+  "theme_color": "#121212",
+  "icons": [
+    {
+      "src": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/18/Apple_logo_black.svg/1024px-Apple_logo_black.svg.png",
+      "sizes": "1024x1024",
+      "type": "image/png"
+    }
+  ]
+}

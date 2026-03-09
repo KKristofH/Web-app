@@ -2,7 +2,7 @@
 <html lang="hu">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
     <title>Titkos Galéria</title>
     
     <link rel="manifest" href="./manifest.json">
@@ -14,6 +14,10 @@
     <style>
         :root { --bg: #121212; --card: #1e1e1e; --text: #ffffff; --primary: #0a84ff; --danger: #ff453a; --success: #32d74b; }
         body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 20px; text-align: center; }
+        
+        /* Gombok véletlen nagyításának megakadályozása dupla kattintáskor */
+        button, input { touch-action: manipulation; }
+
         .view { display: none; max-width: 500px; margin: 0 auto; padding-top: 20px; }
         .active { display: block; }
         h1 { font-size: 24px; margin-bottom: 20px; }
@@ -25,7 +29,6 @@
         .file-upload-wrapper input[type=file] { font-size: 100px; position: absolute; left: 0; top: 0; opacity: 0; cursor: pointer; height: 100%; }
         .file-upload-btn { background: var(--primary); color: white; padding: 15px; border-radius: 10px; font-size: 16px; font-weight: bold; display: block; width: 100%; box-sizing: border-box; }
         
-        /* Galéria stílus */
         #gallery-container { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 80px; }
         .img-card { position: relative; width: 100%; height: 150px; border-radius: 10px; overflow: hidden; border: 1px solid #333; }
         .img-card img { width: 100%; height: 100%; object-fit: cover; cursor: pointer; }
@@ -34,13 +37,49 @@
         .gallery-actions { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); width: 90%; max-width: 450px; display: flex; gap: 10px; z-index: 100; }
         #status-msg { color: var(--success); font-size: 14px; margin-top: 10px; height: 20px; }
 
-        /* Teljes képernyős nézet stílusai */
-        #fullscreen-view { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 200; display: none; flex-direction: column; justify-content: center; align-items: center; }
+        /* --- FRISSÍTETT TELJES KÉPERNYŐS NÉZET --- */
+        #fullscreen-view { 
+            position: fixed; 
+            top: 0; left: 0; 
+            width: 100%; height: 100%; 
+            background: rgba(0,0,0,1); 
+            z-index: 200; 
+            display: none; 
+            align-items: center; 
+            justify-content: center; 
+        }
         #fullscreen-view.active { display: flex; }
-        .fs-close { position: absolute; top: 20px; right: 20px; background: rgba(255,255,255,0.2); border: none; color: white; font-size: 18px; width: 40px; height: 40px; border-radius: 50%; cursor: pointer; z-index: 201; display: flex; align-items: center; justify-content: center; padding: 0;}
-        .fs-nav-container { display: flex; width: 100%; height: 100%; align-items: center; justify-content: space-between; position: relative; }
-        .fs-btn { background: transparent; border: none; color: white; font-size: 40px; padding: 20px; cursor: pointer; z-index: 201; width: 80px; }
-        #fs-img { max-width: 100%; max-height: 100%; object-fit: contain; flex-grow: 1; user-select: none; }
+        
+        /* A kép mostantól 100%-os teret kap */
+        #fs-img { 
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%; 
+            object-fit: contain; 
+            z-index: 201;
+        }
+
+        /* A gombok a kép felett lebegnek */
+        .fs-close { 
+            position: absolute; 
+            /* Figyelembe veszi az iPhone notch-ot */
+            top: calc(env(safe-area-inset-top, 20px) + 10px); 
+            right: 20px; 
+            background: rgba(255,255,255,0.2); 
+            border: none; color: white; font-size: 18px; 
+            width: 40px; height: 40px; border-radius: 50%; 
+            cursor: pointer; z-index: 203; 
+            display: flex; align-items: center; justify-content: center; padding: 0;
+        }
+        .fs-btn { 
+            position: absolute;
+            top: 50%; transform: translateY(-50%);
+            background: rgba(0,0,0,0.5); border: none; color: white; 
+            font-size: 30px; padding: 15px 20px; cursor: pointer; z-index: 202; 
+            border-radius: 10px; width: auto;
+        }
+        .fs-btn.prev { left: 10px; }
+        .fs-btn.next { right: 10px; }
     </style>
 </head>
 <body>
@@ -79,15 +118,11 @@
         </div>
     </div>
 
-    <div id="fullscreen-view" 
-         ontouchstart="touchstartX = event.changedTouches[0].screenX" 
-         ontouchend="touchendX = event.changedTouches[0].screenX; handleGesture()">
+    <div id="fullscreen-view">
         <button class="fs-close" onclick="closeFullscreen()">✕</button>
-        <div class="fs-nav-container">
-            <button class="fs-btn" onclick="prevFsImage()">❮</button>
-            <img id="fs-img" src="">
-            <button class="fs-btn" onclick="nextFsImage()">❯</button>
-        </div>
+        <button class="fs-btn prev" onclick="prevFsImage()">❮</button>
+        <img id="fs-img" src="">
+        <button class="fs-btn next" onclick="nextFsImage()">❯</button>
     </div>
 
 <script>
@@ -99,8 +134,8 @@
 
     let sessionKey = null; 
     let db;
-    let currentGalleryImages = []; // A kibontott képek tömbje a lapozáshoz
-    let currentImgIndex = 0;       // Az éppen nézett kép indexe
+    let currentGalleryImages = []; 
+    let currentImgIndex = 0;       
 
     const request = indexedDB.open("SecureGalleryDB", 1);
     request.onupgradeneeded = (e) => {
@@ -146,7 +181,7 @@
 
     function showView(viewId) {
         document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
-        document.getElementById('fullscreen-view').classList.remove('active'); // Biztosítjuk, hogy ez eltűnjön
+        document.getElementById('fullscreen-view').classList.remove('active'); 
         document.getElementById(viewId).classList.add('active');
     }
 
@@ -185,7 +220,6 @@
         showView('login-view');
     }
 
-    // --- KÉPFELTÖLTÉS ---
     async function handleImage(event) {
         const files = event.target.files;
         if (!files.length) return;
@@ -210,13 +244,12 @@
         showView('menu-view');
     }
 
-    // --- GALÉRIA ÉS TÖRLÉS ---
     async function openGallery() {
         showView('gallery-view');
         const container = document.getElementById('gallery-container');
         container.innerHTML = '<p>Dekódolás...</p>';
         updateDeleteBtn();
-        currentGalleryImages = []; // Lista nullázása
+        currentGalleryImages = []; 
 
         const transaction = db.transaction(['images'], 'readonly');
         const request = transaction.objectStore('images').getAll();
@@ -234,7 +267,7 @@
                 const base64 = await decryptData(imgObj, sessionKey);
                 if (base64) {
                     const index = currentGalleryImages.length;
-                    currentGalleryImages.push(base64); // Eltároljuk a lapozáshoz
+                    currentGalleryImages.push(base64); 
                     
                     const card = document.createElement('div');
                     card.className = 'img-card';
@@ -276,7 +309,7 @@
         };
     }
 
-    // --- TELJES KÉPERNYŐS NÉZET ÉS LAPOZÁS ---
+    // --- TELJES KÉPERNYŐS NÉZET, LAPOZÁS ÉS SWIPE LOGIKA ---
     function openFullscreen(index) {
         currentImgIndex = index;
         document.getElementById('fs-img').src = currentGalleryImages[currentImgIndex];
@@ -287,7 +320,7 @@
     function closeFullscreen() {
         document.getElementById('fullscreen-view').classList.remove('active');
         document.getElementById('gallery-view').classList.add('active');
-        document.getElementById('fs-img').src = ""; // Memória felszabadítása
+        document.getElementById('fs-img').src = ""; 
     }
 
     function nextFsImage() {
@@ -304,14 +337,30 @@
         }
     }
 
-    // Érintőképernyős (Swipe) vezérlés
+    // Biztonságos swipe figyelés, ami nem zavar be a zoomolásba
     let touchstartX = 0;
     let touchendX = 0;
-    
-    function handleGesture() {
-        if (touchendX < touchstartX - 40) nextFsImage(); // Húzás balra -> Következő
-        if (touchendX > touchstartX + 40) prevFsImage(); // Húzás jobbra -> Előző
-    }
+    let isZooming = false;
+
+    const fsView = document.getElementById('fullscreen-view');
+
+    fsView.addEventListener('touchstart', e => {
+        if(e.touches.length > 1) {
+            isZooming = true; // Ha több ujjal ér hozzá, akkor zoomol
+        } else {
+            isZooming = false;
+            touchstartX = e.changedTouches[0].screenX;
+        }
+    }, {passive: true});
+
+    fsView.addEventListener('touchend', e => {
+        // Csak akkor lapoz, ha befejezte a húzást, és nem zoomolt közben
+        if(!isZooming && e.changedTouches.length === 1) {
+            touchendX = e.changedTouches[0].screenX;
+            if (touchendX < touchstartX - 40) nextFsImage(); 
+            if (touchendX > touchstartX + 40) prevFsImage(); 
+        }
+    }, {passive: true});
 </script>
 
 </body>

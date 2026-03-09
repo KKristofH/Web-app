@@ -110,10 +110,21 @@
     </div>
 
 <script>
+    // --- AUTOMATA FRISSÍTŐ (Ezentúl nem ragad be a régi kód) ---
     if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js');
-      });
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('./sw.js').then(reg => {
+                reg.onupdatefound = () => {
+                    const installingWorker = reg.installing;
+                    installingWorker.onstatechange = () => {
+                        if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                            console.log("Új verzió található, frissítés...");
+                            window.location.reload();
+                        }
+                    };
+                };
+            });
+        });
     }
 
     let sessionKey = null; 
@@ -228,7 +239,7 @@
         showView('menu-view');
     }
 
-    // --- JAVÍTOTT, SZINKRON ADATOLVASÁS ---
+    // --- BOMBABIZTOS ADATBÁZIS OLVASÓ (A probléma megoldása) ---
     function openGallery() {
         showView('gallery-view');
         const container = document.getElementById('gallery-container');
@@ -238,35 +249,27 @@
 
         const transaction = db.transaction(['images'], 'readonly');
         const store = transaction.objectStore('images');
-        const cursorRequest = store.openCursor();
         
-        // Először kiolvasunk minden kódolt adatot a memóriába (hogy ne szakadjon meg a kapcsolat)
-        const encryptedRecords = [];
+        // Egyetlen lépésben kikérjük az összes ID-t és adatot, garantálva, hogy nem szakad meg a kapcsolat
+        const reqValues = store.getAll();
+        const reqKeys = store.getAllKeys();
 
-        cursorRequest.onsuccess = (e) => {
-            const cursor = e.target.result;
-            if (cursor) {
-                encryptedRecords.push({
-                    key: cursor.key,
-                    value: cursor.value
-                });
-                cursor.continue(); // Szinkron ugrás a következőre
-            } else {
-                // Ha a kurzor végigért, jöhet a dekódolás!
-                processAndRenderImages(encryptedRecords, container);
+        transaction.oncomplete = () => {
+            const values = reqValues.result;
+            const keys = reqKeys.result;
+
+            if (!values || values.length === 0) {
+                container.innerHTML = '<p style="grid-column: span 2;">Üres a galéria.</p>';
+                return;
             }
+
+            // Összepárosítjuk a kulcsokat az értékekkel
+            const records = values.map((val, i) => ({ key: keys[i], value: val }));
+            processAndRenderImages(records, container);
         };
     }
 
-    // A dekódolás már az adatbázis kapcsolat lezárulása után történik
     async function processAndRenderImages(records, container) {
-        container.innerHTML = '';
-
-        if (records.length === 0) {
-            container.innerHTML = '<p style="grid-column: span 2;">Üres a galéria.</p>';
-            return;
-        }
-
         container.innerHTML = '<p id="loading-text" style="grid-column: span 2;">Képek dekódolása...</p>';
 
         for (let record of records) {

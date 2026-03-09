@@ -28,13 +28,19 @@
         /* Galéria stílus */
         #gallery-container { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 80px; }
         .img-card { position: relative; width: 100%; height: 150px; border-radius: 10px; overflow: hidden; border: 1px solid #333; }
-        .img-card img { width: 100%; height: 100%; object-fit: cover; }
+        .img-card img { width: 100%; height: 100%; object-fit: cover; cursor: pointer; }
         .img-card input[type="checkbox"] { position: absolute; top: 10px; right: 10px; width: 25px; height: 25px; z-index: 10; accent-color: var(--primary); }
         
-        /* Lebegő akciósáv a galériában */
         .gallery-actions { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); width: 90%; max-width: 450px; display: flex; gap: 10px; z-index: 100; }
-        
         #status-msg { color: var(--success); font-size: 14px; margin-top: 10px; height: 20px; }
+
+        /* Teljes képernyős nézet stílusai */
+        #fullscreen-view { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 200; display: none; flex-direction: column; justify-content: center; align-items: center; }
+        #fullscreen-view.active { display: flex; }
+        .fs-close { position: absolute; top: 20px; right: 20px; background: rgba(255,255,255,0.2); border: none; color: white; font-size: 18px; width: 40px; height: 40px; border-radius: 50%; cursor: pointer; z-index: 201; display: flex; align-items: center; justify-content: center; padding: 0;}
+        .fs-nav-container { display: flex; width: 100%; height: 100%; align-items: center; justify-content: space-between; position: relative; }
+        .fs-btn { background: transparent; border: none; color: white; font-size: 40px; padding: 20px; cursor: pointer; z-index: 201; width: 80px; }
+        #fs-img { max-width: 100%; max-height: 100%; object-fit: contain; flex-grow: 1; user-select: none; }
     </style>
 </head>
 <body>
@@ -73,6 +79,17 @@
         </div>
     </div>
 
+    <div id="fullscreen-view" 
+         ontouchstart="touchstartX = event.changedTouches[0].screenX" 
+         ontouchend="touchendX = event.changedTouches[0].screenX; handleGesture()">
+        <button class="fs-close" onclick="closeFullscreen()">✕</button>
+        <div class="fs-nav-container">
+            <button class="fs-btn" onclick="prevFsImage()">❮</button>
+            <img id="fs-img" src="">
+            <button class="fs-btn" onclick="nextFsImage()">❯</button>
+        </div>
+    </div>
+
 <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
@@ -82,6 +99,8 @@
 
     let sessionKey = null; 
     let db;
+    let currentGalleryImages = []; // A kibontott képek tömbje a lapozáshoz
+    let currentImgIndex = 0;       // Az éppen nézett kép indexe
 
     const request = indexedDB.open("SecureGalleryDB", 1);
     request.onupgradeneeded = (e) => {
@@ -127,6 +146,7 @@
 
     function showView(viewId) {
         document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
+        document.getElementById('fullscreen-view').classList.remove('active'); // Biztosítjuk, hogy ez eltűnjön
         document.getElementById(viewId).classList.add('active');
     }
 
@@ -161,6 +181,7 @@
 
     function logout() {
         sessionKey = null;
+        currentGalleryImages = [];
         showView('login-view');
     }
 
@@ -195,6 +216,7 @@
         const container = document.getElementById('gallery-container');
         container.innerHTML = '<p>Dekódolás...</p>';
         updateDeleteBtn();
+        currentGalleryImages = []; // Lista nullázása
 
         const transaction = db.transaction(['images'], 'readonly');
         const request = transaction.objectStore('images').getAll();
@@ -211,11 +233,14 @@
             for (let imgObj of images) {
                 const base64 = await decryptData(imgObj, sessionKey);
                 if (base64) {
+                    const index = currentGalleryImages.length;
+                    currentGalleryImages.push(base64); // Eltároljuk a lapozáshoz
+                    
                     const card = document.createElement('div');
                     card.className = 'img-card';
                     card.innerHTML = `
                         <input type="checkbox" value="${imgObj.id}" onchange="updateDeleteBtn()">
-                        <img src="${base64}">
+                        <img src="${base64}" onclick="openFullscreen(${index})">
                     `;
                     container.appendChild(card);
                 }
@@ -246,9 +271,46 @@
         });
 
         transaction.oncomplete = () => {
-            openGallery(); // Frissítés
+            openGallery();
             alert("Képek törölve!");
         };
+    }
+
+    // --- TELJES KÉPERNYŐS NÉZET ÉS LAPOZÁS ---
+    function openFullscreen(index) {
+        currentImgIndex = index;
+        document.getElementById('fs-img').src = currentGalleryImages[currentImgIndex];
+        document.getElementById('gallery-view').classList.remove('active');
+        document.getElementById('fullscreen-view').classList.add('active');
+    }
+
+    function closeFullscreen() {
+        document.getElementById('fullscreen-view').classList.remove('active');
+        document.getElementById('gallery-view').classList.add('active');
+        document.getElementById('fs-img').src = ""; // Memória felszabadítása
+    }
+
+    function nextFsImage() {
+        if (currentImgIndex < currentGalleryImages.length - 1) {
+            currentImgIndex++;
+            document.getElementById('fs-img').src = currentGalleryImages[currentImgIndex];
+        }
+    }
+
+    function prevFsImage() {
+        if (currentImgIndex > 0) {
+            currentImgIndex--;
+            document.getElementById('fs-img').src = currentGalleryImages[currentImgIndex];
+        }
+    }
+
+    // Érintőképernyős (Swipe) vezérlés
+    let touchstartX = 0;
+    let touchendX = 0;
+    
+    function handleGesture() {
+        if (touchendX < touchstartX - 40) nextFsImage(); // Húzás balra -> Következő
+        if (touchendX > touchstartX + 40) prevFsImage(); // Húzás jobbra -> Előző
     }
 </script>
 

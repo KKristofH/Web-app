@@ -1,4 +1,4 @@
-const CACHE_NAME = 'galeria-cache-v18';
+const CACHE_NAME = 'galeria-cache-v21';
 const urlsToCache = [
   './',
   './index.html',
@@ -34,15 +34,13 @@ self.addEventListener('activate', event => {
 
 self.addEventListener('fetch', event => {
   event.respondWith(
-    caches.match(event.request).then(cachedResponse => {
+    caches.match(event.request, { ignoreSearch: true }).then(cachedResponse => {
       if (cachedResponse) {
         return cachedResponse;
       }
       
       return fetch(event.request).catch(() => {
-        if (event.request.mode === 'navigate' || event.request.headers.get('accept').includes('text/html')) {
-          return caches.match('./index.html');
-        }
+        return caches.match('./index.html');
       });
     })
   );

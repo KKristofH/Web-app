@@ -1,7 +1,8 @@
 {
   "name": "Titkos Galéria",
   "short_name": "Galéria",
-  "start_url": "./index.html",
+  "start_url": ".",
+  "scope": ".",
   "display": "standalone",
   "background_color": "#121212",
   "theme_color": "#121212",

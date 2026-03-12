@@ -4,836 +4,922 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
     <title>Titkos Galéria</title>
+    
     <link rel="manifest" href="./manifest.json">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Galéria">
     <link rel="apple-touch-icon" href="./appstore.png">
+    
     <style>
         :root { --bg: #121212; --card: #1e1e1e; --text: #ffffff; --primary: #0a84ff; --danger: #ff453a; --success: #32d74b; --warning: #ff9f0a; }
         body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 20px; text-align: center; }
+        
         button, input, select { touch-action: manipulation; }
+
         .view { display: none; max-width: 500px; margin: 0 auto; padding-top: 20px; }
         .active { display: block; }
         h1 { font-size: 24px; margin-bottom: 20px; }
         input[type="password"] { width: 100%; padding: 15px; font-size: 20px; text-align: center; border-radius: 10px; border: none; box-sizing: border-box; margin-bottom: 15px; background: #333; color: white; }
         button { background: var(--primary); color: white; border: none; padding: 15px; border-radius: 10px; width: 100%; font-size: 16px; font-weight: bold; margin-bottom: 10px; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
         button.secondary { background: #333; }
         button.danger { background: var(--danger); }
         button.warning { background: var(--warning); }
         select { width: 100%; padding: 15px; border-radius: 10px; font-size: 16px; background: #333; color: white; border: none; margin-bottom: 15px; box-sizing: border-box; }
+        
         .file-upload-wrapper { position: relative; overflow: hidden; display: inline-block; width: 100%; margin-bottom: 15px; }
         .file-upload-wrapper input[type=file] { font-size: 100px; position: absolute; left: 0; top: 0; opacity: 0; cursor: pointer; height: 100%; }
         .file-upload-btn { background: var(--primary); color: white; padding: 15px; border-radius: 10px; font-size: 16px; font-weight: bold; display: block; width: 100%; box-sizing: border-box; }
+        
         #gallery-header { display: flex; gap: 10px; align-items: center; margin-bottom: 15px; }
         #gallery-header select { margin-bottom: 0; flex: 1; }
         #gallery-header button { width: auto; margin-bottom: 0; padding: 12px 15px; }
+
         #gallery-container { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 120px; }
         .img-card { position: relative; width: 100%; height: 150px; border-radius: 10px; overflow: hidden; border: 1px solid #333; background: #222; }
         .img-card img { width: 100%; height: 100%; object-fit: cover; cursor: pointer; }
         .img-card input[type="checkbox"] { position: absolute; top: 10px; right: 10px; width: 25px; height: 25px; z-index: 10; accent-color: var(--primary); }
-        .gallery-actions { position: fixed; bottom: 0; left: 0; width: 100%; background: #1e1e1e; padding: 10px; box-sizing: border-box; display: flex; flex-wrap: wrap; gap: 5px; justify-content: center; z-index: 100; border-top: 1px solid #333; padding-bottom: calc(env(safe-area-inset-bottom, 20px) + 10px); }
+        
+        .gallery-actions { 
+            position: fixed; bottom: 0; left: 0; width: 100%; background: #1e1e1e; 
+            padding: 10px; box-sizing: border-box; display: flex; flex-wrap: wrap; gap: 5px; 
+            justify-content: center; z-index: 100; border-top: 1px solid #333;
+            padding-bottom: calc(env(safe-area-inset-bottom, 20px) + 10px);
+        }
         .gallery-actions button { flex: 1 1 calc(30% - 10px); font-size: 13px; padding: 12px 5px; margin: 0; }
-        #status-msg { font-size: 14px; margin-top: 10px; height: 20px; }
-        #fullscreen-view { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #000; z-index: 200; display: none; align-items: center; justify-content: center; overflow: hidden; }
+        
+        #status-msg { font-size: 14px; margin-top: 10px; min-height: 20px; }
+        #lockout-msg { color: var(--danger); font-size: 16px; font-weight: bold; margin-bottom: 15px; display: none; }
+
+        #fullscreen-view { 
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+            background: #000000; z-index: 200; display: none; 
+            align-items: center; justify-content: center; overflow: hidden; 
+        }
         #fullscreen-view.active { display: flex; }
         #fs-img { max-width: 100%; max-height: 100%; object-fit: contain; z-index: 201; }
-        .fs-close { position: absolute; top: calc(env(safe-area-inset-top, 20px) + 10px); right: 20px; background: rgba(255,255,255,0.2); border: none; color: white; font-size: 18px; width: 40px; height: 40px; border-radius: 50%; cursor: pointer; z-index: 203; display: flex; align-items: center; justify-content: center; padding: 0; }
+        .fs-close { 
+            position: absolute; top: calc(env(safe-area-inset-top, 20px) + 10px); right: 20px; 
+            background: rgba(255,255,255,0.2); border: none; color: white; font-size: 18px; 
+            width: 40px; height: 40px; border-radius: 50%; cursor: pointer; z-index: 203; 
+            display: flex; align-items: center; justify-content: center; padding: 0;
+        }
         #fs-loader { position: absolute; color: white; font-size: 16px; z-index: 202; display: none; }
     </style>
 </head>
 <body>
 
-    
-<div id="login-view" class="view active">
-    <h1>🔒 Titkos Galéria</h1>
-    <p id="login-text">Add meg a jelszavad</p>
-    <input type="password" id="pin-input" placeholder="Jelszo...">
-    <button onclick="login()">Belépés</button>
-    <div id="status-msg"></div>
-</div>
-
-<div id="menu-view" class="view">
-    <h1>Főmenü</h1>
-    <button onclick="showView('upload-view')">📸 Új kép hozzáadása</button>
-    <button onclick="showView('import-view')">📥 Mentés Importálása</button>
-    <button onclick="openGallery()">🖼️ Képek megtekintése</button>
-    <button class="danger" onclick="logout()">Kijelentkezés</button>
-</div>
-
-<div id="move-view" class="view">
-    <h1>Áthelyezés mappába</h1>
-    <p style="color: gray; font-size: 14px;">Hova szeretnéd áthelyezni a kijelölt képeket?</p>
-    <select id="move-album-select"></select>
-    <button onclick="executeMove()">Áthelyezés</button>
-    <button class="secondary" onclick="showView('gallery-view')">Mégsem</button>
-</div>
-
-<div id="import-view" class="view">
-    <h1>📥 Importálás</h1>
-    <p style="font-size: 14px; color: gray;">Válaszd ki a kapott titkosított fájlt, majd add meg a feladó jelszavát!</p>
-    <div class="file-upload-wrapper">
-        <button class="file-upload-btn">Titkosított fájl kiválasztása</button>
-        <input type="file" accept=".json,application/json" id="import-file-input" onchange="loadImportFile(event)">
+    <div id="login-view" class="view active">
+        <h1>🔒 Titkos Galéria</h1>
+        <p id="lockout-msg"></p>
+        <p id="login-text">Add meg a jelszavad</p>
+        <input type="password" id="pin-input" placeholder="Jelszó...">
+        <button id="login-btn" onclick="login()">Belépés</button>
+        <div id="status-msg"></div>
     </div>
-    <p id="import-filename" style="font-size: 14px; color: var(--primary); margin-bottom: 15px;"></p>
-    <input type="password" id="import-pin" placeholder="A felado export-jelszava...">
-    <button class="warning" onclick="processImport()">Importálás és Feloldás</button>
-    <p id="import-status" style="font-size: 14px; color: var(--primary);"></p>
-    <button class="secondary" onclick="showView('menu-view')">Vissza a menübe</button>
-</div>
 
-<div id="upload-view" class="view">
-    <h1>Kép titkosítása</h1>
-    <div class="file-upload-wrapper">
-        <button class="file-upload-btn">Kiválasztás vagy Fotózás</button>
-        <input type="file" accept="image/*" id="image-input" multiple onchange="handleImage(event)">
+    <div id="menu-view" class="view">
+        <h1>Főmenü</h1>
+        <button onclick="showView('upload-view')">📸 Új kép hozzáadása</button>
+        <button onclick="showView('import-view')">📥 Mentés Importálása</button>
+        <button onclick="openGallery()">🖼️ Képek megtekintése</button>
+        <button class="danger" onclick="logout()">Kijelentkezés</button>
     </div>
-    <p id="upload-status" style="font-size: 14px; color: gray;">Várakozás képre...</p>
-    <button class="secondary" onclick="showView('menu-view')">Vissza a menübe</button>
-</div>
 
-<div id="gallery-view" class="view">
-    <div id="gallery-header">
-        <select id="album-select" onchange="changeAlbum()">
-            <option value="ALL">Minden Kép</option>
-        </select>
-        <button onclick="createAlbum()">+ Új</button>
-        <button id="del-album-btn" class="danger" onclick="deleteAlbum()" style="display:none;">Törlés</button>
+    <div id="move-view" class="view">
+        <h1>Áthelyezés mappába</h1>
+        <p style="color: gray; font-size: 14px;">Hova szeretnéd áthelyezni a kijelölt képeket?</p>
+        <select id="move-album-select"></select>
+        <button onclick="executeMove()">Áthelyezés</button>
+        <button class="secondary" onclick="showView('gallery-view')">Mégsem</button>
     </div>
-    <div id="gallery-container"></div>
-    <div class="gallery-actions">
-        <button class="secondary" onclick="showView('menu-view')">Vissza</button>
-        <button class="secondary" id="select-all-btn" onclick="toggleSelectAll()">Összes kijelölése</button>
-        <button class="primary" id="move-btn" style="display:none;" onclick="showMoveModal()">Mozgatás</button>
-        <button class="warning" id="export-btn" style="display:none;" onclick="exportSelected()">Küldés</button>
-        <button class="danger" id="delete-btn" style="display:none;" onclick="deleteSelected()">Törlés</button>
-    </div>
-</div>
 
-<div id="fullscreen-view">
-    <button class="fs-close" onclick="closeFullscreen()">x</button>
-    <div id="fs-loader">Betöltés...</div>
-    <img id="fs-img" src="">
-</div>
+    <div id="import-view" class="view">
+        <h1>📥 Importálás</h1>
+        <p style="font-size: 14px; color: gray;">Válaszd ki a kapott titkosított fájlt, majd add meg a KÜLDÉSI jelszót!</p>
+        
+        <div class="file-upload-wrapper">
+            <button class="file-upload-btn">Titkosított fájl kiválasztása</button>
+            <input type="file" accept=".json,application/json" id="import-file-input" onchange="loadImportFile(event)">
+        </div>
+        <p id="import-filename" style="font-size: 14px; color: var(--primary); margin-bottom: 15px;"></p>
+        
+        <input type="password" id="import-pin" placeholder="Küldési jelszó...">
+        <button class="warning" onclick="processImport()">Importálás és Feloldás</button>
+        <p id="import-status" style="font-size: 14px; color: var(--primary);"></p>
+        <button class="secondary" onclick="showView('menu-view')">Vissza a menübe</button>
+    </div>
+
+    <div id="upload-view" class="view">
+        <h1>Kép titkosítása</h1>
+        <div class="file-upload-wrapper">
+            <button class="file-upload-btn">Kiválasztás vagy Fotózás</button>
+            <input type="file" accept="image/*" id="image-input" multiple onchange="handleImage(event)">
+        </div>
+        <p id="upload-status" style="font-size: 14px; color: gray;">Várakozás képre...</p>
+        <button class="secondary" onclick="showView('menu-view')">Vissza a menübe</button>
+    </div>
+
+    <div id="gallery-view" class="view">
+        <div id="gallery-header">
+            <select id="album-select" onchange="changeAlbum()">
+                <option value="ALL">Minden Kép</option>
+            </select>
+            <button onclick="createAlbum()">+ Új</button>
+            <button id="del-album-btn" class="danger" onclick="deleteAlbum()" style="display:none;">Törlés</button>
+        </div>
+
+        <div id="gallery-container"></div>
+        
+        <div class="gallery-actions">
+            <button class="secondary" onclick="showView('menu-view')">Vissza</button>
+            <button class="secondary" id="select-all-btn" onclick="toggleSelectAll()">Összes kijelölése</button>
+            <button class="primary" id="move-btn" style="display:none;" onclick="showMoveModal()">Mozgatás</button>
+            <button class="warning" id="export-btn" style="display:none;" onclick="exportSelected()">Küldés</button>
+            <button class="danger" id="delete-btn" style="display:none;" onclick="deleteSelected()">Törlés</button>
+        </div>
+    </div>
+
+    <div id="fullscreen-view">
+        <button class="fs-close" onclick="closeFullscreen()">✕</button>
+        <div id="fs-loader">Betöltés...</div>
+        <img id="fs-img" src="">
+    </div>
 
 <script>
-if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js').then(reg => {
-            reg.onupdatefound = () => {
-                const w = reg.installing;
-                w.onstatechange = () => {
-                    if (w.state === 'installed' && navigator.serviceWorker.controller) window.location.reload();
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('./sw.js').then(reg => {
+                reg.onupdatefound = () => {
+                    const installingWorker = reg.installing;
+                    installingWorker.onstatechange = () => {
+                        if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                            window.location.reload();
+                        }
+                    };
                 };
-            };
-        });
-    });
-}
-
-// sessionKey is a NON-EXTRACTABLE CryptoKey.
-// Typing `sessionKey` in any browser console only shows:
-//   CryptoKey { type: "secret", extractable: false, ... }
-// The actual key bytes are locked inside the browser crypto engine.
-// No JavaScript — including console commands — can read them out.
-let sessionKey = null;
-let db;
-let currentGalleryIds = [];
-let currentImgIndex   = 0;
-let isAllSelected     = false;
-let albums            = []; // only lives in memory after login
-
-// --- LOCKOUT -----------------------------------------------------------------
-const MAX_ATTEMPTS    = 5;
-const BASE_LOCKOUT_MS = 5 * 60 * 1000;
-
-function getLockoutData() {
-    try { return JSON.parse(localStorage.getItem('_lk') || '{"a":0,"u":0}'); } catch(e) { return {a:0,u:0}; }
-}
-function checkLockout() {
-    const d = getLockoutData(), now = Date.now();
-    if (d.u > now) return Math.ceil((d.u - now) / 1000);
-    if (d.u > 0 && d.u <= now) localStorage.removeItem('_lk');
-    return 0;
-}
-function recordFailedAttempt() {
-    const d = getLockoutData();
-    d.a = (d.a || 0) + 1;
-    if (d.a >= MAX_ATTEMPTS) d.u = Date.now() + BASE_LOCKOUT_MS * Math.pow(2, d.a - MAX_ATTEMPTS);
-    localStorage.setItem('_lk', JSON.stringify(d));
-}
-function resetLockout() { localStorage.removeItem('_lk'); }
-
-// --- BINARY / BASE64 HELPERS -------------------------------------------------
-function bufferToBase64Sync(buf) {
-    let s = '';
-    for (let i = 0; i < buf.length; i++) s += String.fromCharCode(buf[i]);
-    return btoa(s);
-}
-function base64ToBuffer(b64) {
-    const s = atob(b64), b = new Uint8Array(s.length);
-    for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i);
-    return b;
-}
-async function bufferToBase64Async(buf) {
-    return new Promise(resolve => {
-        const r = new FileReader();
-        r.onload = () => resolve(r.result.split(',')[1]);
-        r.readAsDataURL(new Blob([buf instanceof Uint8Array ? buf : new Uint8Array(buf)]));
-    });
-}
-async function getBase64Safe(data) {
-    return await bufferToBase64Async(Array.isArray(data) ? new Uint8Array(data) : data);
-}
-
-// --- MASTER KEY CRYPTO (non-extractable CryptoKey) ---------------------------
-// The password is used once to derive the key, then discarded.
-// After login, only this opaque CryptoKey object exists in memory.
-async function deriveMasterKey(password, salt) {
-    const km = await crypto.subtle.importKey(
-        "raw", new TextEncoder().encode(password), {name:"PBKDF2"}, false, ["deriveKey"]
-    );
-    return crypto.subtle.deriveKey(
-        {name:"PBKDF2", salt:new Uint8Array(salt), iterations:100000, hash:"SHA-256"},
-        km, {name:"AES-GCM", length:256},
-        false,  // extractable:false -- key bytes permanently inaccessible to JS
-        ["encrypt","decrypt"]
-    );
-}
-
-async function encryptWithKey(str, key) {
-    const iv  = crypto.getRandomValues(new Uint8Array(12));
-    const enc = await crypto.subtle.encrypt({name:"AES-GCM",iv}, key, new TextEncoder().encode(str));
-    return {iv: Array.from(iv), data: Array.from(new Uint8Array(enc))};
-}
-
-async function decryptWithKey(obj, key) {
-    try {
-        const dec = await crypto.subtle.decrypt(
-            {name:"AES-GCM", iv:new Uint8Array(obj.iv)}, key, new Uint8Array(obj.data)
-        );
-        return new TextDecoder().decode(dec);
-    } catch(e) { return null; }
-}
-
-// --- PASSWORD-BASED CRYPTO (export / import file transfer only) --------------
-// Export files use this portable {salt,iv,data} format so recipients on
-// other devices can decrypt with only a shared export password.
-async function deriveKeyFromPassword(password, salt) {
-    const km = await crypto.subtle.importKey(
-        "raw", new TextEncoder().encode(password), {name:"PBKDF2"}, false, ["deriveKey"]
-    );
-    return crypto.subtle.deriveKey(
-        {name:"PBKDF2", salt:new Uint8Array(salt), iterations:100000, hash:"SHA-256"},
-        km, {name:"AES-GCM", length:256}, false, ["encrypt","decrypt"]
-    );
-}
-async function encryptWithPassword(str, password) {
-    const salt = crypto.getRandomValues(new Uint8Array(16));
-    const iv   = crypto.getRandomValues(new Uint8Array(12));
-    const key  = await deriveKeyFromPassword(password, salt);
-    const enc  = await crypto.subtle.encrypt({name:"AES-GCM",iv}, key, new TextEncoder().encode(str));
-    return {salt:Array.from(salt), iv:Array.from(iv), data:Array.from(new Uint8Array(enc))};
-}
-async function decryptWithPassword(obj, password) {
-    try {
-        const key = await deriveKeyFromPassword(password, new Uint8Array(obj.salt));
-        const dec = await crypto.subtle.decrypt(
-            {name:"AES-GCM", iv:new Uint8Array(obj.iv)}, key, new Uint8Array(obj.data)
-        );
-        return new TextDecoder().decode(dec);
-    } catch(e) { return null; }
-}
-
-// --- ALBUM FIELD HELPERS -----------------------------------------------------
-async function encryptAlbum(name) {
-    if (!name || !sessionKey) return null;
-    return await encryptWithKey(name, sessionKey);
-}
-async function decryptAlbum(enc) {
-    if (!enc) return null;
-    if (typeof enc === 'string') return enc; // legacy plain-text
-    return await decryptWithKey(enc, sessionKey);
-}
-
-// --- ALBUM STORAGE (encrypted in localStorage) -------------------------------
-async function saveAlbums() {
-    if (!sessionKey) return;
-    const enc = await encryptWithKey(JSON.stringify(albums), sessionKey);
-    localStorage.setItem('gallery_albums', JSON.stringify({v:2, iv:enc.iv, data:enc.data}));
-}
-async function loadAlbums() {
-    const raw = localStorage.getItem('gallery_albums');
-    if (!raw) { albums = []; return; }
-    try {
-        const p = JSON.parse(raw);
-        if (Array.isArray(p)) { albums = p; await saveAlbums(); return; }
-        if (p.v === 2) { const d = await decryptWithKey(p, sessionKey); albums = d ? JSON.parse(d) : []; return; }
-        albums = [];
-    } catch(e) { albums = []; }
-}
-
-// --- ONE-TIME MIGRATION (old format -> non-extractable key format) -----------
-// Runs silently on the first login after this update.
-// Requires the raw password string — which the user just typed — to decrypt
-// all existing records, then re-encrypts them with the new masterKey.
-// After this runs once, the raw password is never needed again.
-async function migrateToMasterKey(pin, masterKey, masterSalt) {
-    const statusEl = document.getElementById('status-msg');
-    statusEl.style.color = 'var(--warning)';
-    statusEl.innerText   = 'Egyszeri frissítés folyamatban...';
-
-    // Migrate albums list
-    const rawAlbums = localStorage.getItem('gallery_albums');
-    if (rawAlbums) {
-        try {
-            const p = JSON.parse(rawAlbums);
-            if (Array.isArray(p)) { albums = p; }
-            else if (p.salt) { const d = await decryptWithPassword(p, pin); albums = d ? JSON.parse(d) : []; }
-        } catch(e) { albums = []; }
-    }
-
-    // Migrate DB records
-    const allRecords = await new Promise(r => {
-        db.transaction(['images'],'readonly').objectStore('images').getAll().onsuccess = e => r(e.target.result);
-    });
-    const allKeys = await new Promise(r => {
-        db.transaction(['images'],'readonly').objectStore('images').getAllKeys().onsuccess = e => r(e.target.result);
-    });
-
-    const updates = [];
-    for (let i = 0; i < allRecords.length; i++) {
-        const rec = allRecords[i];
-        if (rec.version === 3) continue;
-
-        let base64Full, base64Thumb;
-        if (rec.version === 2) {
-            base64Full  = await decryptWithPassword(rec.full,  pin);
-            base64Thumb = rec.thumb ? await decryptWithPassword(rec.thumb, pin) : null;
-        } else {
-            base64Full = await decryptWithPassword(rec, pin);
-        }
-        if (!base64Full) continue;
-        if (!base64Thumb) base64Thumb = await generateThumbnail(base64Full);
-
-        let albumName = null;
-        if (rec.album) {
-            albumName = typeof rec.album === 'string' ? rec.album : await decryptWithPassword(rec.album, pin);
-        }
-
-        updates.push({
-            key:    allKeys[i],
-            record: {
-                version: 3,
-                full:    await encryptWithKey(base64Full,  masterKey),
-                thumb:   await encryptWithKey(base64Thumb, masterKey),
-                album:   albumName ? await encryptWithKey(albumName, masterKey) : null
-            }
+            });
         });
     }
 
-    if (updates.length) {
-        const t = db.transaction(['images'],'readwrite');
-        const s = t.objectStore('images');
-        updates.forEach(u => s.put(u.record, u.key));
-        await new Promise(r => { t.oncomplete = r; });
-    }
+    // --- GLOBÁLIS VÁLTOZÓK ---
+    // A jelszó már NEM stringként tárolódik! Csak a megsemmisíthetetlen CryptoKey objektum.
+    let sessionKeyMaterial = null; 
+    let db;
+    let currentGalleryIds = []; 
+    let currentImgIndex = 0;       
+    let isAllSelected = false;
+    let albums = [];
+    let lockoutInterval = null;
 
-    localStorage.setItem('masterSalt', bufferToBase64Sync(masterSalt));
-    const token = await encryptWithKey("OK", masterKey);
-    localStorage.setItem('appSetup', JSON.stringify({v:2, iv:token.iv, data:token.data}));
-    await saveAlbums();
-    statusEl.innerText = '';
-}
-
-// --- INDEXEDDB ---------------------------------------------------------------
-const dbRequest = indexedDB.open("SecureGalleryDB", 1);
-dbRequest.onupgradeneeded = e => {
-    const d = e.target.result;
-    if (!d.objectStoreNames.contains('images')) d.createObjectStore('images', {autoIncrement:true});
-};
-dbRequest.onsuccess = e => { db = e.target.result; };
-
-window.onload = () => {
-    if (!localStorage.getItem('appSetup')) document.getElementById('login-text').innerText = "Hozd létre a mesterjelszavad";
-    renderAlbumSelects();
-};
-
-function showView(id) {
-    document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
-    document.getElementById('fullscreen-view').classList.remove('active');
-    document.getElementById(id).classList.add('active');
-}
-
-// --- LOGIN -------------------------------------------------------------------
-async function login() {
-    const pin = document.getElementById('pin-input').value;
-    if (!pin) return;
-
-    const remaining = checkLockout();
-    if (remaining > 0) {
-        setStatus('Tul sok hibás próbálkozás. Várj ' + Math.ceil(remaining/60) + ' percet.', 'danger');
-        document.getElementById('pin-input').value = '';
-        return;
-    }
-
-    let masterSalt;
-    const stored = localStorage.getItem('masterSalt');
-    masterSalt = stored ? base64ToBuffer(stored) : crypto.getRandomValues(new Uint8Array(16));
-
-    // Derive the key — after this line, the raw `pin` string should not outlive login()
-    const masterKey = await deriveMasterKey(pin, masterSalt);
-
-    if (!localStorage.getItem('appSetup')) {
-        // First run
-        localStorage.setItem('masterSalt', bufferToBase64Sync(masterSalt));
-        const token = await encryptWithKey("OK", masterKey);
-        localStorage.setItem('appSetup', JSON.stringify({v:2, iv:token.iv, data:token.data}));
-        sessionKey = masterKey;
-        albums = [];
-        renderAlbumSelects();
-        showView('menu-view');
-    } else {
-        const saved = JSON.parse(localStorage.getItem('appSetup'));
-
-        if (saved.v === 2) {
-            // New format: verify with masterKey
-            const ok = await decryptWithKey(saved, masterKey);
-            if (ok === "OK") {
-                resetLockout();
-                sessionKey = masterKey;
-                await loadAlbums();
-                renderAlbumSelects();
-                showView('menu-view');
-            } else { onFailedLogin(); }
-        } else {
-            // Old format: verify with raw password, then migrate
-            const ok = await decryptWithPassword(saved, pin);
-            if (ok === "OK") {
-                resetLockout();
-                sessionKey = masterKey;
-                await migrateToMasterKey(pin, masterKey, masterSalt);
-                await loadAlbums();
-                renderAlbumSelects();
-                showView('menu-view');
-            } else { onFailedLogin(); }
+    const request = indexedDB.open("SecureGalleryDB", 1);
+    request.onupgradeneeded = (e) => {
+        let db = e.target.result;
+        if (!db.objectStoreNames.contains('images')) {
+            db.createObjectStore('images', { autoIncrement: true });
         }
-    }
+    };
+    request.onsuccess = (e) => { db = e.target.result; };
 
-    document.getElementById('pin-input').value = '';
-}
-
-function onFailedLogin() {
-    recordFailedAttempt();
-    const d = getLockoutData(), rem = checkLockout();
-    if (rem > 0) setStatus('Fiók zárolva ' + Math.ceil(rem/60) + ' percre.', 'danger');
-    else {
-        const left = MAX_ATTEMPTS - d.a;
-        setStatus(left > 0 ? ('Hibás jelszó! Még ' + left + ' próbálkozás.') : 'Hibás jelszó!', 'warning');
-    }
-}
-function setStatus(msg, level) {
-    const el = document.getElementById('status-msg');
-    el.style.color = 'var(--' + level + ')';
-    el.innerText   = msg;
-}
-function logout() {
-    sessionKey = null;
-    currentGalleryIds = [];
-    albums = [];
-    renderAlbumSelects();
-    document.getElementById('status-msg').innerText = '';
-    showView('login-view');
-}
-
-// --- ALBUMS ------------------------------------------------------------------
-function renderAlbumSelects() {
-    const main = document.getElementById('album-select');
-    const move = document.getElementById('move-album-select');
-    main.innerHTML = '<option value="ALL">Minden Kép</option>';
-    move.innerHTML = '';
-    albums.forEach(a => {
-        main.innerHTML += '<option value="' + a + '">' + a + '</option>';
-        move.innerHTML += '<option value="' + a + '">' + a + '</option>';
-    });
-}
-async function createAlbum() {
-    const name = prompt("Mappa neve:");
-    if (!name || !name.trim()) return;
-    if (albums.includes(name.trim())) { alert("Ez a mappa már létezik!"); return; }
-    albums.push(name.trim());
-    await saveAlbums();
-    renderAlbumSelects();
-    document.getElementById('album-select').value = name.trim();
-    changeAlbum();
-}
-async function deleteAlbum() {
-    const sel = document.getElementById('album-select').value;
-    if (sel === 'ALL') return;
-    if (!confirm('Biztosan törlöd a "' + sel + '" mappát?\n\nA képek visszakerülnek a Minden Kép közé.')) return;
-    albums = albums.filter(a => a !== sel);
-    await saveAlbums();
-    const allRecords = await new Promise(r => { db.transaction(['images'],'readonly').objectStore('images').getAll().onsuccess = e => r(e.target.result); });
-    const allKeys    = await new Promise(r => { db.transaction(['images'],'readonly').objectStore('images').getAllKeys().onsuccess = e => r(e.target.result); });
-    const toUpdate = [];
-    for (let i = 0; i < allRecords.length; i++) {
-        if (await decryptAlbum(allRecords[i].album) === sel) { allRecords[i].album = null; toUpdate.push({key:allKeys[i], rec:allRecords[i]}); }
-    }
-    if (toUpdate.length) {
-        const t = db.transaction(['images'],'readwrite'), s = t.objectStore('images');
-        toUpdate.forEach(u => s.put(u.rec, u.key));
-        await new Promise(r => { t.oncomplete = r; });
-    }
-    renderAlbumSelects();
-    document.getElementById('album-select').value = 'ALL';
-    changeAlbum();
-}
-function changeAlbum() {
-    const sel = document.getElementById('album-select').value;
-    document.getElementById('del-album-btn').style.display = (sel !== 'ALL') ? 'block' : 'none';
-    openGallery();
-}
-
-// --- THUMBNAIL ---------------------------------------------------------------
-function generateThumbnail(base64Image, maxWidth) {
-    maxWidth = maxWidth || 300;
-    return new Promise(resolve => {
-        const img = new Image();
-        img.onload = () => {
-            const canvas = document.createElement('canvas');
-            const scale  = Math.min(maxWidth / img.width, 1);
-            canvas.width  = img.width  * scale;
-            canvas.height = img.height * scale;
-            canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-            const r = canvas.toDataURL('image/jpeg', 0.5);
-            canvas.width = 0; canvas.height = 0; img.src = '';
-            resolve(r);
-        };
-        img.src = base64Image;
-    });
-}
-
-// --- UPLOAD ------------------------------------------------------------------
-async function handleImage(event) {
-    const files = event.target.files;
-    if (!files.length) return;
-    document.getElementById('upload-status').innerText = files.length + ' kép feldolgozása...';
-    for (let i = 0; i < files.length; i++) {
-        document.getElementById('upload-status').innerText = 'Titkositas: ' + (i+1) + ' / ' + files.length;
-        await new Promise(resolve => {
+    // --- ALAP SEGÉDFÜGGVÉNYEK ---
+    function bufferToBase64(buf) {
+        return new Promise(resolve => {
             const reader = new FileReader();
-            reader.onload = async e => {
-                const orig  = e.target.result;
-                const thumb = await generateThumbnail(orig);
-                const encF  = await encryptWithKey(orig,  sessionKey);
-                const encT  = await encryptWithKey(thumb, sessionKey);
-                const t     = db.transaction(['images'],'readwrite');
-                t.objectStore('images').add({version:3, full:encF, thumb:encT, album:null});
-                t.oncomplete = resolve;
-            };
-            reader.readAsDataURL(files[i]);
+            reader.onload = () => resolve(reader.result.split(',')[1]);
+            reader.readAsDataURL(new Blob([buf]));
         });
     }
-    document.getElementById('upload-status').innerText = "Várakozás képre...";
-    document.getElementById('image-input').value = '';
-    alert("Feltöltés sikeres!");
-    showView('menu-view');
-}
 
-// --- GALLERY -----------------------------------------------------------------
-function openGallery() {
-    showView('gallery-view');
-    const container = document.getElementById('gallery-container');
-    container.innerHTML = '<p id="loading-text" style="grid-column: span 2;">Képek betöltése...</p>';
-    isAllSelected = false;
-    updateSelectionBtns();
-    currentGalleryIds = [];
-    const currentAlbum = document.getElementById('album-select').value;
-    db.transaction(['images'],'readonly').objectStore('images').getAllKeys().onsuccess = async e => {
-        const keys = e.target.result;
-        if (!keys || !keys.length) { container.innerHTML = '<p style="grid-column: span 2;">Üres a galéria.</p>'; return; }
-        for (const id of keys) { await renderSingleThumbnail(id, container, currentAlbum); await new Promise(r => setTimeout(r, 10)); }
-        const lt = document.getElementById('loading-text');
-        if (lt) lt.remove();
-        if (!currentGalleryIds.length) container.innerHTML = '<p style="grid-column: span 2;">Ebben a mappában nincsenek képek.</p>';
-    };
-}
-function renderSingleThumbnail(id, container, currentAlbum) {
-    return new Promise(resolve => {
-        db.transaction(['images'],'readonly').objectStore('images').get(id).onsuccess = async e => {
-            const rec = e.target.result;
-            if (rec) {
-                const recAlbum = (await decryptAlbum(rec.album)) || 'ALL';
-                if (currentAlbum !== 'ALL' && recAlbum !== currentAlbum) { resolve(); return; }
-                const t = rec.version === 3 ? rec.thumb : (rec.thumb || rec);
-                const base64Thumb = await decryptWithKey(t, sessionKey);
-                if (base64Thumb) {
-                    const idx  = currentGalleryIds.length;
-                    currentGalleryIds.push(id);
-                    const card = document.createElement('div');
-                    card.className = 'img-card';
-                    card.innerHTML = '<input type="checkbox" value="' + id + '" onchange="updateSelectionBtns()"><img src="' + base64Thumb + '" onclick="openFullscreen(' + idx + ')">';
-                    container.appendChild(card);
+    function base64ToBuffer(b64) {
+        const binstr = atob(b64);
+        const buf = new Uint8Array(binstr.length);
+        for (let i = 0; i < binstr.length; i++) {
+            buf[i] = binstr.charCodeAt(i);
+        }
+        return buf;
+    }
+
+    async function getBase64Safe(data) {
+        let safeData = data;
+        if (Array.isArray(data)) { safeData = new Uint8Array(data); }
+        return await bufferToBase64(safeData);
+    }
+
+    // --- 1. ÚJ KRIPTOGRÁFIAI MOTOR (EXTRACTABLE: FALSE & ZERO-MIGRATION) ---
+    
+    // Ez csinálja a "fekete dobozt" a jelszóból
+    async function getMasterKeyMaterial(password) {
+        const enc = new TextEncoder();
+        return await crypto.subtle.importKey(
+            "raw", 
+            enc.encode(password), 
+            {name: "PBKDF2"}, 
+            false, // EXTRACTABLE: FALSE -> Soha nem nyerhető ki JS-ből!
+            ["deriveBits", "deriveKey"]
+        );
+    }
+
+    // Ez állítja elő a matematikai kulcsot (Matematikailag egyezik a régivel!)
+    async function deriveAESKey(keyMaterial, salt) {
+        return await crypto.subtle.deriveKey(
+            { name: "PBKDF2", salt: salt, iterations: 100000, hash: "SHA-256" },
+            keyMaterial, 
+            { name: "AES-GCM", length: 256 }, 
+            false, 
+            ["encrypt", "decrypt"]
+        );
+    }
+
+    async function encryptData(dataBuffer, keyMaterial) {
+        const salt = crypto.getRandomValues(new Uint8Array(16));
+        const iv = crypto.getRandomValues(new Uint8Array(12));
+        const key = await deriveAESKey(keyMaterial, salt);
+        const encrypted = await crypto.subtle.encrypt({name: "AES-GCM", iv: iv}, key, dataBuffer);
+        return { salt: salt, iv: iv, data: new Uint8Array(encrypted) }; 
+    }
+
+    async function decryptData(encryptedObj, keyMaterial) {
+        try {
+            const salt = new Uint8Array(encryptedObj.salt);
+            const iv = new Uint8Array(encryptedObj.iv);
+            const data = new Uint8Array(encryptedObj.data);
+            const key = await deriveAESKey(keyMaterial, salt);
+            const decrypted = await crypto.subtle.decrypt({name: "AES-GCM", iv: iv}, key, data);
+            return new Uint8Array(decrypted); 
+        } catch (e) { return null; }
+    }
+
+    // Szöveg (mappa) titkosító segédfüggvények
+    async function encryptText(text, keyMaterial) {
+        const enc = new TextEncoder();
+        const encData = await encryptData(enc.encode(text), keyMaterial);
+        // Szövegeket Base64-ben tároljuk a könnyebb JSON mentés miatt
+        return {
+            salt: Array.from(encData.salt),
+            iv: Array.from(encData.iv),
+            data: await bufferToBase64(encData.data)
+        };
+    }
+
+    async function decryptText(encryptedObj, keyMaterial) {
+        try {
+            const encData = {
+                salt: new Uint8Array(encryptedObj.salt),
+                iv: new Uint8Array(encryptedObj.iv),
+                data: base64ToBuffer(encryptedObj.data)
+            };
+            const decBuf = await decryptData(encData, keyMaterial);
+            if (!decBuf) return null;
+            const dec = new TextDecoder();
+            return dec.decode(decBuf);
+        } catch(e) { return null; }
+    }
+
+    function generateThumbnail(base64Image, maxWidth = 300) {
+        return new Promise((resolve) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                const scale = Math.min(maxWidth / img.width, 1);
+                canvas.width = img.width * scale;
+                canvas.height = img.height * scale;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                const result = canvas.toDataURL('image/jpeg', 0.5);
+                canvas.width = 0; canvas.height = 0; img.src = '';
+                resolve(result); 
+            };
+            img.src = base64Image;
+        });
+    }
+
+    // --- 2. BRUTE-FORCE VÉDELEM LOGIKA ---
+    function checkLockout() {
+        let lockUntil = parseInt(localStorage.getItem('bf_lock') || '0');
+        let now = Date.now();
+        const btn = document.getElementById('login-btn');
+        const msg = document.getElementById('lockout-msg');
+        const input = document.getElementById('pin-input');
+
+        if (now < lockUntil) {
+            btn.disabled = true;
+            input.disabled = true;
+            msg.style.display = 'block';
+            let remain = Math.ceil((lockUntil - now) / 60000);
+            msg.innerText = `Túl sok hibás próbálkozás! Kizárva: ${remain} percig.`;
+            if(!lockoutInterval) lockoutInterval = setInterval(checkLockout, 10000);
+            return true;
+        } else {
+            btn.disabled = false;
+            input.disabled = false;
+            msg.style.display = 'none';
+            if(lockoutInterval) { clearInterval(lockoutInterval); lockoutInterval = null; }
+            return false;
+        }
+    }
+
+    function handleFailedLogin() {
+        let attempts = parseInt(localStorage.getItem('bf_attempts') || '0') + 1;
+        localStorage.setItem('bf_attempts', attempts);
+        if (attempts >= 5) {
+            let minutes = 5 * Math.pow(2, attempts - 5); // 5, 10, 20, 40 perc...
+            let lockUntil = Date.now() + (minutes * 60000);
+            localStorage.setItem('bf_lock', lockUntil);
+            checkLockout();
+        } else {
+            const msg = document.getElementById('status-msg');
+            msg.innerText = `Hibás jelszó! (${5 - attempts} próbálkozás maradt)`;
+            msg.style.color = "var(--danger)";
+        }
+    }
+
+    function resetBruteForce() {
+        localStorage.removeItem('bf_attempts');
+        localStorage.removeItem('bf_lock');
+    }
+
+    // --- 3. ALBUM (MAPPA) RENDSZER (Titkosított) ---
+    async function initAlbums() {
+        let encAlbums = localStorage.getItem('gallery_albums_enc');
+        if (encAlbums) {
+            let dec = await decryptText(JSON.parse(encAlbums), sessionKeyMaterial);
+            albums = dec ? JSON.parse(dec) : [];
+        } else {
+            // ZERO-MIGRATION a régi plaintext mappákhoz
+            let oldAlbums = localStorage.getItem('gallery_albums');
+            if (oldAlbums) {
+                albums = JSON.parse(oldAlbums);
+                await saveAlbums(); // Azonnal letitkosítja
+                localStorage.removeItem('gallery_albums'); // Törli a nyílt szöveget
+            } else {
+                albums = [];
+            }
+        }
+        renderAlbumSelects();
+    }
+
+    async function saveAlbums() {
+        let jsonStr = JSON.stringify(albums);
+        let enc = await encryptText(jsonStr, sessionKeyMaterial);
+        localStorage.setItem('gallery_albums_enc', JSON.stringify(enc));
+    }
+
+    function renderAlbumSelects() {
+        const mainSelect = document.getElementById('album-select');
+        const moveSelect = document.getElementById('move-album-select');
+        mainSelect.innerHTML = '<option value="ALL">Minden Kép</option>';
+        moveSelect.innerHTML = '';
+        albums.forEach(a => {
+            mainSelect.innerHTML += `<option value="${a}">${a}</option>`;
+            moveSelect.innerHTML += `<option value="${a}">${a}</option>`;
+        });
+    }
+
+    async function createAlbum() {
+        const name = prompt("Mappa neve:");
+        if(!name || name.trim() === '') return;
+        if(albums.includes(name.trim())) { alert("Ez a mappa már létezik!"); return; }
+        
+        albums.push(name.trim());
+        await saveAlbums();
+        renderAlbumSelects();
+        
+        document.getElementById('album-select').value = name.trim();
+        changeAlbum();
+    }
+
+    async function deleteAlbum() {
+        const sel = document.getElementById('album-select').value;
+        if (sel === 'ALL') return;
+        if (!confirm(`Biztosan törlöd a "${sel}" mappát?\n\nA benne lévő képek nem törlődnek, csak visszakerülnek a Minden Kép közé!`)) return;
+
+        albums = albums.filter(a => a !== sel);
+        await saveAlbums();
+
+        // Képek kiszabadítása (A mappajelzés most már titkosított objektum!)
+        const transaction = db.transaction(['images'], 'readwrite');
+        const store = transaction.objectStore('images');
+        const req = store.openCursor();
+        
+        req.onsuccess = async e => {
+            const cursor = e.target.result;
+            if(cursor) {
+                const rec = cursor.value;
+                let recAlbum = null;
+                if (rec.album) {
+                    recAlbum = typeof rec.album === 'string' ? rec.album : await decryptText(rec.album, sessionKeyMaterial);
                 }
+                
+                if(recAlbum === sel) {
+                    rec.album = null; // Vissza a Minden Képbe
+                    cursor.update(rec);
+                }
+                cursor.continue();
+            } else {
+                renderAlbumSelects();
+                document.getElementById('album-select').value = 'ALL';
+                changeAlbum();
             }
-            resolve();
         };
-    });
-}
-
-// --- SELECTION ---------------------------------------------------------------
-function toggleSelectAll() {
-    isAllSelected = !isAllSelected;
-    document.querySelectorAll('#gallery-container input[type="checkbox"]').forEach(cb => cb.checked = isAllSelected);
-    updateSelectionBtns();
-}
-function updateSelectionBtns() {
-    const sel = document.querySelectorAll('#gallery-container input:checked');
-    const all = document.querySelectorAll('#gallery-container input[type="checkbox"]');
-    const sSel = document.getElementById('select-all-btn');
-    if (sel.length === all.length && all.length > 0) { isAllSelected = true; sSel.innerText = "Kijelölés törlése"; }
-    else { isAllSelected = false; sSel.innerText = "Összes kijelölése"; }
-    const has = sel.length > 0;
-    ['delete-btn','export-btn','move-btn'].forEach(id => document.getElementById(id).style.display = has ? 'block' : 'none');
-    if (has) {
-        document.getElementById('delete-btn').innerText = 'Törlés (' + sel.length + ')';
-        document.getElementById('export-btn').innerText = 'Küldés (' + sel.length + ')';
-        document.getElementById('move-btn').innerText   = 'Mozgatás (' + sel.length + ')';
     }
-}
 
-// --- MOVE --------------------------------------------------------------------
-function showMoveModal() {
-    if (!albums.length) { alert("Nincs még mappad!\nCsinálj egyet a '+ Új' gombbal."); return; }
-    renderAlbumSelects();
-    showView('move-view');
-}
-async function executeMove() {
-    const target   = document.getElementById('move-album-select').value;
-    const encAlbum = await encryptAlbum(target);
-    const selected = document.querySelectorAll('#gallery-container input:checked');
-    const t        = db.transaction(['images'],'readwrite');
-    const store    = t.objectStore('images');
-    let count = 0;
-    for (const cb of selected) {
-        const id = Number(cb.value);
-        await new Promise(resolve => {
-            store.get(id).onsuccess = e => {
-                const r = e.target.result;
-                if (r) { r.album = encAlbum; store.put(r, id).onsuccess = resolve; } else resolve();
+    function changeAlbum() {
+        const sel = document.getElementById('album-select').value;
+        document.getElementById('del-album-btn').style.display = (sel !== 'ALL') ? 'block' : 'none';
+        openGallery(); 
+    }
+
+    // --- APP INDÍTÁSA ÉS BELÉPÉS ---
+    window.onload = () => {
+        if(!localStorage.getItem('appSetup')) {
+            document.getElementById('login-text').innerText = "Hozd létre a mesterjelszavad";
+        }
+        checkLockout();
+    };
+
+    function showView(viewId) {
+        document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
+        document.getElementById('fullscreen-view').classList.remove('active'); 
+        document.getElementById(viewId).classList.add('active');
+    }
+
+    async function login() {
+        if (checkLockout()) return;
+
+        const pin = document.getElementById('pin-input').value;
+        if (!pin) return;
+
+        const msg = document.getElementById('status-msg');
+        msg.innerText = "Belépés...";
+        msg.style.color = "var(--success)";
+
+        // Azonnal Fekete Dobozzá alakítjuk a megadott jelszót
+        const tempMaterial = await getMasterKeyMaterial(pin);
+
+        if (!localStorage.getItem('appSetup')) {
+            const verificationToken = await encryptText("OK", tempMaterial);
+            localStorage.setItem('appSetup', JSON.stringify(verificationToken));
+            sessionKeyMaterial = tempMaterial; 
+            await initAlbums();
+            document.getElementById('pin-input').value = ''; // Biztonsági törlés
+            msg.innerText = "";
+            showView('menu-view');
+        } else {
+            const savedToken = JSON.parse(localStorage.getItem('appSetup'));
+            const result = await decryptText(savedToken, tempMaterial);
+            
+            if (result === "OK") {
+                sessionKeyMaterial = tempMaterial;
+                resetBruteForce();
+                await initAlbums();
+                document.getElementById('pin-input').value = ''; // Biztonsági törlés
+                msg.innerText = "";
+                showView('menu-view');
+            } else { 
+                handleFailedLogin();
+            }
+        }
+    }
+
+    function logout() {
+        sessionKeyMaterial = null; // A kinyerhetetlen kulcs is megsemmisül!
+        albums = [];
+        currentGalleryIds = [];
+        document.getElementById('album-select').innerHTML = '<option value="ALL">Minden Kép</option>';
+        showView('login-view');
+    }
+
+    // --- FELTÖLTÉS ÉS GALÉRIA ---
+    async function handleImage(event) {
+        const files = event.target.files;
+        if (!files.length) return;
+        
+        document.getElementById('upload-status').innerText = `${files.length} kép feldolgozása...`;
+        const currentAlbum = document.getElementById('album-select').value;
+        
+        for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            document.getElementById('upload-status').innerText = `Titkosítás: ${i + 1} / ${files.length}`;
+            
+            await new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = async (e) => {
+                    const originalBase64 = e.target.result;
+                    const thumbBase64 = await generateThumbnail(originalBase64);
+                    
+                    const enc = new TextEncoder();
+                    const encryptedFull = await encryptData(enc.encode(originalBase64), sessionKeyMaterial);
+                    const encryptedThumb = await encryptData(enc.encode(thumbBase64), sessionKeyMaterial);
+                    
+                    const encAlbum = currentAlbum !== 'ALL' ? await encryptText(currentAlbum, sessionKeyMaterial) : null;
+                    
+                    const payload = { version: 2, full: encryptedFull, thumb: encryptedThumb, album: encAlbum };
+                    const transaction = db.transaction(['images'], 'readwrite');
+                    transaction.objectStore('images').add(payload);
+                    transaction.oncomplete = resolve;
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+        
+        document.getElementById('upload-status').innerText = "Várakozás képre...";
+        document.getElementById('image-input').value = '';
+        alert("Feltöltés sikeres!");
+        showView('menu-view');
+    }
+
+    function openGallery() {
+        showView('gallery-view');
+        const container = document.getElementById('gallery-container');
+        container.innerHTML = '<p id="loading-text" style="grid-column: span 2;">Képek betöltése...</p>';
+        
+        isAllSelected = false; 
+        updateSelectionBtns();
+        currentGalleryIds = []; 
+
+        const currentAlbum = document.getElementById('album-select').value;
+
+        const transaction = db.transaction(['images'], 'readonly');
+        const store = transaction.objectStore('images');
+        const request = store.getAllKeys();
+
+        request.onsuccess = async (e) => {
+            const keys = e.target.result;
+            if (!keys || keys.length === 0) {
+                container.innerHTML = '<p style="grid-column: span 2;">Üres a galéria.</p>';
+                return;
+            }
+            for (let id of keys) {
+                await renderSingleThumbnail(id, container, currentAlbum);
+                await new Promise(res => setTimeout(res, 10)); 
+            }
+            const loadingText = document.getElementById('loading-text');
+            if(loadingText) loadingText.remove();
+            
+            if(currentGalleryIds.length === 0) {
+                container.innerHTML = '<p style="grid-column: span 2;">Ebben a mappában nincsenek képek.</p>';
+            }
+        };
+    }
+
+    function renderSingleThumbnail(id, container, currentAlbum) {
+        return new Promise((resolve) => {
+            const transaction = db.transaction(['images'], 'readonly');
+            const request = transaction.objectStore('images').get(id);
+
+            request.onsuccess = async (e) => {
+                const record = e.target.result;
+                if (record) {
+                    let recAlbum = 'ALL';
+                    if (record.album) {
+                        recAlbum = typeof record.album === 'string' ? record.album : await decryptText(record.album, sessionKeyMaterial);
+                    }
+                    
+                    if (currentAlbum !== 'ALL' && recAlbum !== currentAlbum) {
+                        resolve(); return; 
+                    }
+                    
+                    let dataToDecrypt = record.version === 2 ? record.thumb : record;
+                    const decBuf = await decryptData(dataToDecrypt, sessionKeyMaterial);
+                    
+                    if (decBuf) {
+                        const dec = new TextDecoder();
+                        const base64Thumb = dec.decode(decBuf);
+                        const index = currentGalleryIds.length;
+                        currentGalleryIds.push(id); 
+                        const card = document.createElement('div');
+                        card.className = 'img-card';
+                        card.innerHTML = `<input type="checkbox" value="${id}" onchange="updateSelectionBtns()"><img src="${base64Thumb}" onclick="openFullscreen(${index})">`;
+                        container.appendChild(card);
+                    }
+                }
+                resolve();
             };
         });
-        count++;
     }
-    alert(count + ' kép áthelyezve: ' + target);
-    showView('gallery-view');
-    openGallery();
-}
 
-// --- EXPORT ------------------------------------------------------------------
-// navigator.canShare() is unreliable — it returns false for large files even
-// when iOS can share them fine. So we never use canShare as a gatekeeper.
-// Instead: encrypt everything (async), store the file, then show a
-// "Tap to share" button. That second tap is a fresh user gesture, which is
-// what iOS requires to allow navigator.share() to open the share sheet.
-let _pendingShareFile = null;
+    function toggleSelectAll() {
+        const checkboxes = document.querySelectorAll('#gallery-container input[type="checkbox"]');
+        isAllSelected = !isAllSelected;
+        checkboxes.forEach(cb => cb.checked = isAllSelected);
+        updateSelectionBtns();
+    }
 
-async function exportSelected() {
-    const selected = document.querySelectorAll('#gallery-container input:checked');
-    if (!selected.length) return;
-
-    const exportPassword = prompt("Add meg az export jelszót.
-(A kapó ezt irja be importáláskor - lehet különböző a fő jelszavadtól.)");
-    if (!exportPassword) return;
-
-    const exportBtn = document.getElementById('export-btn');
-    exportBtn.disabled = true;
-    exportBtn.innerText = "Csomagolás (0%)...";
-    let blobParts = ["["];
-
-    for (let i = 0; i < selected.length; i++) {
-        const id = Number(selected[i].value);
-        exportBtn.innerText = 'Csomagolás (' + Math.round(((i+1)/selected.length)*100) + '%)...';
-
-        const record = await new Promise(resolve => {
-            const t = db.transaction(['images'],'readonly');
-            t.objectStore('images').get(id).onsuccess = e => resolve(e.target.result);
-            t.onerror = () => resolve(null);
-        });
-        if (!record) continue;
-
-        const base64Full = await decryptWithKey(record.full || record, sessionKey);
-        if (!base64Full) continue;
-        const albumName = await decryptAlbum(record.album);
-
-        const expFull = await encryptWithPassword(base64Full, exportPassword);
-        let expAlbum  = null;
-        if (albumName) {
-            const ea = await encryptWithPassword(albumName, exportPassword);
-            expAlbum = {salt:ea.salt, iv:ea.iv, data: await getBase64Safe(new Uint8Array(ea.data))};
+    function updateSelectionBtns() {
+        const selected = document.querySelectorAll('#gallery-container input:checked');
+        const allBoxes = document.querySelectorAll('#gallery-container input[type="checkbox"]');
+        
+        const delBtn = document.getElementById('delete-btn');
+        const expBtn = document.getElementById('export-btn');
+        const moveBtn = document.getElementById('move-btn');
+        const selectAllBtn = document.getElementById('select-all-btn');
+        
+        if (selected.length === allBoxes.length && allBoxes.length > 0) {
+            isAllSelected = true;
+            selectAllBtn.innerText = "Kijelölés törlése";
+        } else {
+            isAllSelected = false;
+            selectAllBtn.innerText = "Összes kijelölése";
         }
-
-        const ser = {
-            version: 2,
-            full: {salt:expFull.salt, iv:expFull.iv, data: await getBase64Safe(new Uint8Array(expFull.data))},
-            album: expAlbum
-        };
-
-        let chunk = JSON.stringify(ser);
-        if (i < selected.length - 1) chunk += ",";
-        blobParts.push(chunk);
-        await new Promise(r => setTimeout(r, 20));
+        
+        if (selected.length > 0) {
+            delBtn.style.display = 'block';
+            expBtn.style.display = 'block';
+            moveBtn.style.display = 'block';
+            delBtn.innerText = `Törlés (${selected.length})`;
+            expBtn.innerText = `Küldés (${selected.length})`;
+            moveBtn.innerText = `Mozgatás (${selected.length})`;
+        } else {
+            delBtn.style.display = 'none';
+            expBtn.style.display = 'none';
+            moveBtn.style.display = 'none';
+        }
     }
 
-    blobParts.push("]");
-    const blob = new Blob(blobParts, {type:'application/json'});
-    _pendingShareFile = new File([blob], 'titkositott_kepek.json', {type:'application/json'});
+    // --- MAPPÁBA MOZGATÁS ---
+    function showMoveModal() {
+        if(albums.length === 0) { alert("Nincs még létrehozott mappád!\nCsinálj egyet a '+ Új' gombbal a galéria tetején."); return; }
+        renderAlbumSelects();
+        showView('move-view');
+    }
 
-    exportBtn.disabled  = false;
-    exportBtn.innerText = 'Koppints a küldéshez!';
-    exportBtn.onclick   = _doShare;
-}
+    async function executeMove() {
+        const targetAlbum = document.getElementById('move-album-select').value;
+        const selected = document.querySelectorAll('#gallery-container input:checked');
+        
+        const transaction = db.transaction(['images'], 'readwrite');
+        const store = transaction.objectStore('images');
+        const encAlbumData = await encryptText(targetAlbum, sessionKeyMaterial);
+        
+        let movedCount = 0;
+        for (let cb of selected) {
+            const id = Number(cb.value);
+            await new Promise(resolve => {
+                const req = store.get(id);
+                req.onsuccess = e => {
+                    const rec = e.target.result;
+                    if(rec) {
+                        rec.album = encAlbumData; 
+                        store.put(rec, id).onsuccess = resolve;
+                    } else { resolve(); }
+                }
+            });
+            movedCount++;
+        }
+        
+        alert(`${movedCount} kép áthelyezve ide: ${targetAlbum}`);
+        showView('gallery-view');
+        openGallery(); 
+    }
 
-// Called by the "Tap to share" button.
-// This is a direct user tap — iOS allows navigator.share() here.
-// We never call canShare() because it lies about large files.
-function _doShare() {
-    if (!_pendingShareFile) return;
-    navigator.share({files: [_pendingShareFile]})
-        .catch(err => {
-            if (err.name === 'AbortError') return; // user cancelled — leave button active
-            // share failed (e.g. no share targets) — fall back to download
-            const url = URL.createObjectURL(_pendingShareFile);
-            const a = document.createElement('a');
-            a.href = url; a.download = _pendingShareFile.name; a.click();
-            URL.revokeObjectURL(url);
-            _resetAfterExport();
-        })
-        .then(() => _resetAfterExport());
-}
+    // --- 4. DEDIKÁLT KÜLDÉSI JELSZÓ EXPORTÁLÁSKOR ---
+    async function exportSelected() {
+        const selected = document.querySelectorAll('#gallery-container input:checked');
+        if (selected.length === 0) return;
 
-function _resetAfterExport() {
-    _pendingShareFile = null;
-    document.querySelectorAll('#gallery-container input:checked').forEach(cb => cb.checked = false);
-    updateSelectionBtns();
-}
+        // VÉDELEM: Megosztási jelszó kérése!
+        const expPw = prompt("🔒 KÜLDÉSI JELSZÓ LÉTREHOZÁSA:\n\nAdj meg egy tetszőleges, egyszerű jelszót (pl. Nyaralas26). A fogadó fél ezzel tudja majd beimportálni a képeket.\n\nFONTOS: NE a saját mesterjelszavadat add meg, mert az maradjon titokban!");
+        if (!expPw) return;
 
-// --- IMPORT ------------------------------------------------------------------
-let pendingImportData = null;
-function loadImportFile(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-    document.getElementById('import-filename').innerText = file.name;
-    const reader = new FileReader();
-    reader.onload = e => {
-        try { pendingImportData = JSON.parse(e.target.result); }
-        catch { alert("Érvénytelen fájlformátum!"); pendingImportData = null; }
-    };
-    reader.readAsText(file);
-}
-async function processImport() {
-    if (!pendingImportData) { alert("Előbb válassz ki egy fájlt!"); return; }
-    const senderPin = document.getElementById('import-pin').value;
-    if (!senderPin) { alert("Írd be a feladó export-jelszavát!"); return; }
-    const statusEl = document.getElementById('import-status');
-    statusEl.innerText = "Feldolgozás és Átkódolás...";
-    let ok = 0, fail = 0;
+        const exportBtn = document.getElementById('export-btn');
+        exportBtn.innerText = "Csomagolás (0%)...";
+        
+        const exportKeyMaterial = await getMasterKeyMaterial(expPw);
+        let blobParts = ["["];
 
-    for (const rec of pendingImportData) {
-        const src = rec.version === 2 ? rec.full : rec;
-        const fullObj = {
-            salt: new Uint8Array(src.salt), iv: new Uint8Array(src.iv),
-            data: typeof src.data === 'string' ? base64ToBuffer(src.data) : new Uint8Array(src.data)
-        };
-        const base64Full = await decryptWithPassword(fullObj, senderPin);
-        if (!base64Full) { fail++; continue; }
+        for (let i = 0; i < selected.length; i++) {
+            const id = Number(selected[i].value);
+            exportBtn.innerText = `Csomagolás (${Math.round(((i + 1) / selected.length) * 100)}%)...`;
 
-        let albumName = null;
-        if (rec.album) {
-            if (typeof rec.album === 'string') { albumName = rec.album; }
-            else {
-                const aObj = {
-                    salt: new Uint8Array(rec.album.salt), iv: new Uint8Array(rec.album.iv),
-                    data: typeof rec.album.data === 'string' ? base64ToBuffer(rec.album.data) : new Uint8Array(rec.album.data)
-                };
-                albumName = await decryptWithPassword(aObj, senderPin);
+            const record = await new Promise((resolve) => {
+                const transaction = db.transaction(['images'], 'readonly');
+                const store = transaction.objectStore('images');
+                const request = store.get(id);
+                request.onsuccess = (e) => resolve(e.target.result);
+                request.onerror = () => resolve(null);
+            });
+
+            if (!record) continue;
+
+            // Kibontjuk a saját kulcsunkkal
+            let plainAlbumName = null;
+            if (record.album) {
+                plainAlbumName = typeof record.album === 'string' ? record.album : await decryptText(record.album, sessionKeyMaterial);
             }
+            
+            // TITKOSÍTJUK A KÜLDÉSI KULCCSAL
+            let exportAlbumData = plainAlbumName ? await encryptText(plainAlbumName, exportKeyMaterial) : null;
+            let serializableRecord = { version: 2, album: exportAlbumData };
+            
+            let dataToDecryptFull = record.version === 2 ? record.full : record;
+            let dataToDecryptThumb = record.version === 2 ? record.thumb : record;
+            
+            const decFullBuf = await decryptData(dataToDecryptFull, sessionKeyMaterial);
+            const decThumbBuf = await decryptData(dataToDecryptThumb, sessionKeyMaterial);
+
+            const newEncFull = await encryptData(decFullBuf, exportKeyMaterial);
+            const newEncThumb = await encryptData(decThumbBuf, exportKeyMaterial);
+
+            serializableRecord.full = {
+                salt: Array.from(newEncFull.salt),
+                iv: Array.from(newEncFull.iv),
+                data: await bufferToBase64(newEncFull.data) 
+            };
+            serializableRecord.thumb = {
+                salt: Array.from(newEncThumb.salt),
+                iv: Array.from(newEncThumb.iv),
+                data: await bufferToBase64(newEncThumb.data)
+            };
+
+            let jsonStr = JSON.stringify(serializableRecord);
+            if (i < selected.length - 1) {
+                jsonStr += ",";
+            }
+            blobParts.push(jsonStr);
+            await new Promise(res => setTimeout(res, 20)); 
         }
 
-        if (albumName && !albums.includes(albumName)) { albums.push(albumName); await saveAlbums(); }
+        blobParts.push("]");
+        exportBtn.innerText = "Fájl átadása...";
 
-        const thumb  = await generateThumbnail(base64Full);
-        const encF   = await encryptWithKey(base64Full, sessionKey);
-        const encT   = await encryptWithKey(thumb,      sessionKey);
-        const encAlb = await encryptAlbum(albumName);
+        const blob = new Blob(blobParts, { type: 'application/json' });
+        const file = new File([blob], 'titkositott_kepek.json', { type: 'application/json' });
 
-        await new Promise(resolve => {
-            const t = db.transaction(['images'],'readwrite');
-            t.objectStore('images').add({version:3, full:encF, thumb:encT, album:encAlb});
-            t.oncomplete = resolve;
-        });
-        ok++;
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+            navigator.share({
+                files: [file]
+            }).catch(err => console.log('Megosztás megszakítva', err));
+        } else {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'titkositott_kepek.json';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+        
+        document.querySelectorAll('#gallery-container input:checked').forEach(cb => cb.checked = false);
+        updateSelectionBtns();
     }
 
-    statusEl.innerText = '';
-    document.getElementById('import-pin').value = '';
-    document.getElementById('import-file-input').value = '';
-    document.getElementById('import-filename').innerText = '';
-    pendingImportData = null;
-    alert('Importálás befejezve!\nSikeres: ' + ok + '\nHibás jelszó: ' + fail);
-    renderAlbumSelects();
-    showView('menu-view');
-}
+    // --- BIZTONSÁGOS IMPORTÁLÁS ---
+    let pendingImportData = null;
 
-// --- DELETE ------------------------------------------------------------------
-async function deleteSelected() {
-    if (!confirm("Biztosan véglegesen törlöd a kijelölt képeket?")) return;
-    const selected = document.querySelectorAll('#gallery-container input:checked');
-    const t        = db.transaction(['images'],'readwrite');
-    const store    = t.objectStore('images');
-    selected.forEach(cb => store.delete(Number(cb.value)));
-    t.oncomplete = () => openGallery();
-}
-
-// --- FULLSCREEN --------------------------------------------------------------
-async function loadFullscreenImage(index) {
-    const imgEl  = document.getElementById('fs-img');
-    const loader = document.getElementById('fs-loader');
-    imgEl.src = ''; loader.style.display = 'block';
-    const imageId = currentGalleryIds[index];
-    db.transaction(['images'],'readonly').objectStore('images').get(imageId).onsuccess = async e => {
-        const rec = e.target.result;
-        if (rec) { const full = await decryptWithKey(rec.full || rec, sessionKey); imgEl.src = full; }
-        loader.style.display = 'none';
-    };
-}
-function openFullscreen(index) {
-    currentImgIndex = index;
-    document.getElementById('gallery-view').classList.remove('active');
-    document.getElementById('fullscreen-view').classList.add('active');
-    loadFullscreenImage(currentImgIndex);
-}
-function closeFullscreen() {
-    document.getElementById('fullscreen-view').classList.remove('active');
-    document.getElementById('gallery-view').classList.add('active');
-    document.getElementById('fs-img').src = '';
-}
-function nextFsImage() { if (currentImgIndex < currentGalleryIds.length - 1) { currentImgIndex++; loadFullscreenImage(currentImgIndex); } }
-function prevFsImage() { if (currentImgIndex > 0) { currentImgIndex--; loadFullscreenImage(currentImgIndex); } }
-
-let touchstartX = 0, touchendX = 0, isZooming = false;
-const fsView = document.getElementById('fullscreen-view');
-fsView.addEventListener('touchstart', e => {
-    if (e.touches.length > 1) isZooming = true;
-    else { isZooming = false; touchstartX = e.changedTouches[0].screenX; }
-}, {passive:true});
-fsView.addEventListener('touchend', e => {
-    if (!isZooming && e.changedTouches.length === 1) {
-        touchendX = e.changedTouches[0].screenX;
-        if (touchendX < touchstartX - 40) nextFsImage();
-        if (touchendX > touchstartX + 40) prevFsImage();
+    function loadImportFile(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        document.getElementById('import-filename').innerText = file.name;
+        
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                pendingImportData = JSON.parse(e.target.result);
+            } catch (err) {
+                alert("Érvénytelen fájlformátum!");
+                pendingImportData = null;
+            }
+        };
+        reader.readAsText(file);
     }
-}, {passive:true});
+
+    async function processImport() {
+        if (!pendingImportData) { alert("Előbb válassz ki egy fájlt!"); return; }
+        const senderPin = document.getElementById('import-pin').value;
+        if (!senderPin) { alert("Írd be a feladó jelszavát!"); return; }
+
+        const statusEl = document.getElementById('import-status');
+        statusEl.innerText = "Feldolgozás és Átkódolás...";
+
+        const senderMaterial = await getMasterKeyMaterial(senderPin);
+        let successCount = 0; let failCount = 0;
+
+        for (let record of pendingImportData) {
+            let dataToDecryptFull = {
+                salt: new Uint8Array(record.full.salt),
+                iv: new Uint8Array(record.full.iv),
+                data: base64ToBuffer(record.full.data)
+            };
+
+            const decFullBuf = await decryptData(dataToDecryptFull, senderMaterial);
+
+            if (decFullBuf) {
+                const dec = new TextDecoder();
+                const base64Full = dec.decode(decFullBuf);
+                const thumbBase64 = await generateThumbnail(base64Full);
+                
+                // Mappa visszafejtése a feladó kulcsával
+                let plainAlbumName = null;
+                if(record.album) {
+                    plainAlbumName = await decryptText(record.album, senderMaterial);
+                }
+
+                // Újratitkosítás a saját mesterkulcsoddal
+                const encryptedFull = await encryptData(decFullBuf, sessionKeyMaterial);
+                const encryptedThumb = await encryptData(enc.encode(thumbBase64), sessionKeyMaterial);
+                const myAlbumData = plainAlbumName ? await encryptText(plainAlbumName, sessionKeyMaterial) : null;
+                
+                const payload = { version: 2, full: encryptedFull, thumb: encryptedThumb, album: myAlbumData };
+
+                if (plainAlbumName && !albums.includes(plainAlbumName)) {
+                    albums.push(plainAlbumName);
+                    await saveAlbums();
+                }
+
+                await new Promise(resolve => {
+                    const transaction = db.transaction(['images'], 'readwrite');
+                    transaction.objectStore('images').add(payload);
+                    transaction.oncomplete = resolve;
+                });
+                successCount++;
+            } else { failCount++; }
+        }
+
+        statusEl.innerText = "";
+        document.getElementById('import-pin').value = '';
+        document.getElementById('import-file-input').value = '';
+        document.getElementById('import-filename').innerText = '';
+        pendingImportData = null;
+
+        alert(`Importálás befejezve!\nSikeres: ${successCount}\nHibás jelszó: ${failCount}`);
+        renderAlbumSelects(); 
+        showView('menu-view');
+    }
+
+    async function deleteSelected() {
+        if (!confirm("Biztosan véglegesen törlöd a kijelölt képeket?")) return;
+        const selected = document.querySelectorAll('#gallery-container input:checked');
+        const transaction = db.transaction(['images'], 'readwrite');
+        const store = transaction.objectStore('images');
+        selected.forEach(cb => store.delete(Number(cb.value))); 
+        transaction.oncomplete = () => openGallery(); 
+    }
+
+    async function loadFullscreenImage(index) {
+        const imgEl = document.getElementById('fs-img');
+        const loader = document.getElementById('fs-loader');
+        
+        imgEl.src = ""; loader.style.display = "block";
+
+        const imageId = currentGalleryIds[index];
+        const transaction = db.transaction(['images'], 'readonly');
+        const request = transaction.objectStore('images').get(imageId);
+
+        request.onsuccess = async (e) => {
+            const record = e.target.result;
+            if(record) {
+                let dataToDecrypt = record.version === 2 ? record.full : record;
+                const decBuf = await decryptData(dataToDecrypt, sessionKeyMaterial);
+                if(decBuf) {
+                    const dec = new TextDecoder();
+                    imgEl.src = dec.decode(decBuf);
+                }
+                loader.style.display = "none";
+            }
+        };
+    }
+
+    function openFullscreen(index) {
+        currentImgIndex = index;
+        document.getElementById('gallery-view').classList.remove('active');
+        document.getElementById('fullscreen-view').classList.add('active');
+        loadFullscreenImage(currentImgIndex);
+    }
+
+    function closeFullscreen() {
+        document.getElementById('fullscreen-view').classList.remove('active');
+        document.getElementById('gallery-view').classList.add('active');
+        document.getElementById('fs-img').src = ""; 
+    }
+
+    function nextFsImage() {
+        if (currentImgIndex < currentGalleryIds.length - 1) {
+            currentImgIndex++; loadFullscreenImage(currentImgIndex);
+        }
+    }
+
+    function prevFsImage() {
+        if (currentImgIndex > 0) {
+            currentImgIndex--; loadFullscreenImage(currentImgIndex);
+        }
+    }
+
+    let touchstartX = 0; let touchendX = 0; let isZooming = false;
+    const fsView = document.getElementById('fullscreen-view');
+
+    fsView.addEventListener('touchstart', e => {
+        if(e.touches.length > 1) { isZooming = true; } 
+        else { isZooming = false; touchstartX = e.changedTouches[0].screenX; }
+    }, {passive: true});
+
+    fsView.addEventListener('touchend', e => {
+        if(!isZooming && e.changedTouches.length === 1) {
+            touchendX = e.changedTouches[0].screenX;
+            if (touchendX < touchstartX - 40) nextFsImage(); 
+            if (touchendX > touchstartX + 40) prevFsImage(); 
+        }
+    }, {passive: true});
 </script>
+
 </body>
 </html>

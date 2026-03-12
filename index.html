@@ -74,7 +74,7 @@
     </div>
 
     <div id="import-view" class="view">
-        <h1>📥 Importálás (Helyreállító)</h1>
+        <h1>📥 Importálás</h1>
         <p style="font-size: 14px; color: gray;">Válaszd ki a kapott titkosított fájlt, majd add meg a feladó jelszavát!</p>
         
         <div class="file-upload-wrapper">
@@ -153,35 +153,23 @@
         });
     }
 
-    // EXTRA VÉDELEM EXPORTÁLÁSHOZ (Soha többé nem csinál rossz fájlt)
+    // Visszaállított, letisztult dekódoló algoritmus
+    function base64ToBuffer(b64) {
+        const binstr = atob(b64);
+        const buf = new Uint8Array(binstr.length);
+        for (let i = 0; i < binstr.length; i++) {
+            buf[i] = binstr.charCodeAt(i);
+        }
+        return buf;
+    }
+
+    // EXTRA VÉDELEM EXPORTÁLÁSHOZ (A jövőben is golyóálló marad)
     async function getBase64Safe(data) {
         let safeData = data;
         if (Array.isArray(data)) {
             safeData = new Uint8Array(data); 
         }
         return await bufferToBase64(safeData);
-    }
-
-    // AUTOMATA HIBAJAVÍTÓ MOTOR IMPORTÁLÁSHOZ (A megmentő kód)
-    function base64ToBuffer(b64) {
-        try {
-            const binstr = atob(b64);
-            
-            // Érzékeli a régi, elrontott szöveges formátumot
-            if (binstr.indexOf(',') !== -1 && /^[0-9,]+$/.test(binstr.substring(0, 50))) {
-                const numArr = binstr.split(',').map(Number);
-                return new Uint8Array(numArr); // Visszaalakítja hibátlan adattá!
-            }
-
-            // Normál, tökéletes fájlok beolvasása
-            const buf = new Uint8Array(binstr.length);
-            for (let i = 0; i < binstr.length; i++) {
-                buf[i] = binstr.charCodeAt(i);
-            }
-            return buf;
-        } catch(e) {
-            return new Uint8Array(0);
-        }
     }
 
     async function deriveKey(password, salt) {
@@ -481,7 +469,7 @@
         if (!senderPin) { alert("Írd be a feladó jelszavát!"); return; }
 
         const statusEl = document.getElementById('import-status');
-        statusEl.innerText = "Adatok helyreállítása...";
+        statusEl.innerText = "Feldolgozás és Átkódolás folyamatban...";
 
         let successCount = 0; let failCount = 0;
 
@@ -526,7 +514,7 @@
         document.getElementById('import-filename').innerText = '';
         pendingImportData = null;
 
-        alert(`Művelet befejezve!\nSikeresen helyreállítva: ${successCount} kép\nHibás jelszó: ${failCount}`);
+        alert(`Importálás befejezve!\nSikeresen importálva: ${successCount} kép\nHibás jelszó miatt elutasítva: ${failCount} kép`);
         showView('menu-view');
     }
 

@@ -668,7 +668,7 @@
         const selected = document.querySelectorAll('#gallery-container input:checked');
         if (selected.length === 0) return;
 
-        const expPw = prompt("🔒 KÜLDÉSI JELSZÓ LÉTREHOZÁSA:\n\nAdj meg egy tetszőleges jelszót. A fogadó fél ezzel tudja beimportálni a képeket.\n\nFONTOS: NE a saját mesterjelszavadat add meg!");
+        const expPw = prompt("🔒 KÜLDÉSI JELSZÓ LÉTREHOZÁSA:\n\nAdj meg egy tetszőleges jelszót. A fogadó fél ezzel tudja beimportálni a képeket.");
         if (!expPw) return;
 
         const exportBtn = document.getElementById('export-btn');

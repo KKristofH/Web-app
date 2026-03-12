@@ -630,9 +630,12 @@ async function executeMove() {
 }
 
 // --- EXPORT ------------------------------------------------------------------
-// Photos are decrypted with the masterKey, then re-encrypted with a
-// separate export password. The recipient enters only this export password
-// when importing — your master password is never involved in file transfers.
+// iOS Safari blocks navigator.share() after any await — the browser marks the
+// original tap gesture as "expired". Fix: run the full encryption pass first,
+// then replace the button label with "Tap to Share". That second tap is a
+// fresh user gesture, so iOS allows the share sheet to open.
+let _pendingShareFile = null;
+
 async function exportSelected() {
     const selected = document.querySelectorAll('#gallery-container input:checked');
     if (!selected.length) return;
@@ -641,6 +644,7 @@ async function exportSelected() {
     if (!exportPassword) return;
 
     const exportBtn = document.getElementById('export-btn');
+    exportBtn.disabled = true;
     exportBtn.innerText = "Csomagolás (0%)...";
     let blobParts = ["["];
 
@@ -679,19 +683,37 @@ async function exportSelected() {
     }
 
     blobParts.push("]");
-    exportBtn.innerText = "Fájl átadása...";
     const blob = new Blob(blobParts, {type:'application/json'});
-    const file = new File([blob], 'titkositott_kepek.json', {type:'application/json'});
-    if (navigator.canShare && navigator.canShare({files:[file]})) {
-        navigator.share({files:[file]}).catch(e => console.log('Megosztás megszakítva', e));
+    _pendingShareFile = new File([blob], 'titkositott_kepek.json', {type:'application/json'});
+    exportBtn.disabled = false;
+
+    if (navigator.canShare && navigator.canShare({files:[_pendingShareFile]})) {
+        // Show a tap button — share MUST be called from a direct user tap on iOS
+        exportBtn.innerText = 'Koppints a küldéshez!';
+        exportBtn.onclick = doShare;
     } else {
-        const url = URL.createObjectURL(blob);
+        // Non-iOS: trigger download immediately
+        const url = URL.createObjectURL(_pendingShareFile);
         const a = document.createElement('a');
         a.href = url; a.download = 'titkositott_kepek.json'; a.click();
         URL.revokeObjectURL(url);
+        _resetExportBtn();
     }
+}
+
+// Called by the "Tap to share" button — this is a fresh user gesture so
+// iOS Safari allows navigator.share() to open the system share sheet.
+function doShare() {
+    if (!_pendingShareFile) return;
+    navigator.share({files:[_pendingShareFile]})
+        .catch(e => { if (e.name !== 'AbortError') alert('Megosztási hiba: ' + e.message); })
+        .finally(() => _resetExportBtn());
+}
+
+function _resetExportBtn() {
+    _pendingShareFile = null;
     document.querySelectorAll('#gallery-container input:checked').forEach(cb => cb.checked = false);
-    updateSelectionBtns();
+    updateSelectionBtns(); // hides the button and resets onclick via re-render
 }
 
 // --- IMPORT ------------------------------------------------------------------

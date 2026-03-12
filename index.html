@@ -163,8 +163,6 @@
         });
     }
 
-    // --- GLOBÁLIS VÁLTOZÓK ---
-    // A jelszó már NEM stringként tárolódik! Csak a megsemmisíthetetlen CryptoKey objektum.
     let sessionKeyMaterial = null; 
     let db;
     let currentGalleryIds = []; 
@@ -182,7 +180,6 @@
     };
     request.onsuccess = (e) => { db = e.target.result; };
 
-    // --- ALAP SEGÉDFÜGGVÉNYEK ---
     function bufferToBase64(buf) {
         return new Promise(resolve => {
             const reader = new FileReader();
@@ -206,21 +203,17 @@
         return await bufferToBase64(safeData);
     }
 
-    // --- 1. ÚJ KRIPTOGRÁFIAI MOTOR (EXTRACTABLE: FALSE & ZERO-MIGRATION) ---
-    
-    // Ez csinálja a "fekete dobozt" a jelszóból
     async function getMasterKeyMaterial(password) {
         const enc = new TextEncoder();
         return await crypto.subtle.importKey(
             "raw", 
             enc.encode(password), 
             {name: "PBKDF2"}, 
-            false, // EXTRACTABLE: FALSE -> Soha nem nyerhető ki JS-ből!
+            false, 
             ["deriveBits", "deriveKey"]
         );
     }
 
-    // Ez állítja elő a matematikai kulcsot (Matematikailag egyezik a régivel!)
     async function deriveAESKey(keyMaterial, salt) {
         return await crypto.subtle.deriveKey(
             { name: "PBKDF2", salt: salt, iterations: 100000, hash: "SHA-256" },
@@ -250,11 +243,9 @@
         } catch (e) { return null; }
     }
 
-    // Szöveg (mappa) titkosító segédfüggvények
     async function encryptText(text, keyMaterial) {
         const enc = new TextEncoder();
         const encData = await encryptData(enc.encode(text), keyMaterial);
-        // Szövegeket Base64-ben tároljuk a könnyebb JSON mentés miatt
         return {
             salt: Array.from(encData.salt),
             iv: Array.from(encData.iv),
@@ -294,7 +285,6 @@
         });
     }
 
-    // --- 2. BRUTE-FORCE VÉDELEM LOGIKA ---
     function checkLockout() {
         let lockUntil = parseInt(localStorage.getItem('bf_lock') || '0');
         let now = Date.now();
@@ -323,7 +313,7 @@
         let attempts = parseInt(localStorage.getItem('bf_attempts') || '0') + 1;
         localStorage.setItem('bf_attempts', attempts);
         if (attempts >= 5) {
-            let minutes = 5 * Math.pow(2, attempts - 5); // 5, 10, 20, 40 perc...
+            let minutes = 5 * Math.pow(2, attempts - 5); 
             let lockUntil = Date.now() + (minutes * 60000);
             localStorage.setItem('bf_lock', lockUntil);
             checkLockout();
@@ -339,19 +329,17 @@
         localStorage.removeItem('bf_lock');
     }
 
-    // --- 3. ALBUM (MAPPA) RENDSZER (Titkosított) ---
     async function initAlbums() {
         let encAlbums = localStorage.getItem('gallery_albums_enc');
         if (encAlbums) {
             let dec = await decryptText(JSON.parse(encAlbums), sessionKeyMaterial);
             albums = dec ? JSON.parse(dec) : [];
         } else {
-            // ZERO-MIGRATION a régi plaintext mappákhoz
             let oldAlbums = localStorage.getItem('gallery_albums');
             if (oldAlbums) {
                 albums = JSON.parse(oldAlbums);
-                await saveAlbums(); // Azonnal letitkosítja
-                localStorage.removeItem('gallery_albums'); // Törli a nyílt szöveget
+                await saveAlbums(); 
+                localStorage.removeItem('gallery_albums'); 
             } else {
                 albums = [];
             }
@@ -397,7 +385,6 @@
         albums = albums.filter(a => a !== sel);
         await saveAlbums();
 
-        // Képek kiszabadítása (A mappajelzés most már titkosított objektum!)
         const transaction = db.transaction(['images'], 'readwrite');
         const store = transaction.objectStore('images');
         const req = store.openCursor();
@@ -412,7 +399,7 @@
                 }
                 
                 if(recAlbum === sel) {
-                    rec.album = null; // Vissza a Minden Képbe
+                    rec.album = null; 
                     cursor.update(rec);
                 }
                 cursor.continue();
@@ -430,7 +417,6 @@
         openGallery(); 
     }
 
-    // --- APP INDÍTÁSA ÉS BELÉPÉS ---
     window.onload = () => {
         if(!localStorage.getItem('appSetup')) {
             document.getElementById('login-text').innerText = "Hozd létre a mesterjelszavad";
@@ -454,7 +440,6 @@
         msg.innerText = "Belépés...";
         msg.style.color = "var(--success)";
 
-        // Azonnal Fekete Dobozzá alakítjuk a megadott jelszót
         const tempMaterial = await getMasterKeyMaterial(pin);
 
         if (!localStorage.getItem('appSetup')) {
@@ -462,7 +447,7 @@
             localStorage.setItem('appSetup', JSON.stringify(verificationToken));
             sessionKeyMaterial = tempMaterial; 
             await initAlbums();
-            document.getElementById('pin-input').value = ''; // Biztonsági törlés
+            document.getElementById('pin-input').value = ''; 
             msg.innerText = "";
             showView('menu-view');
         } else {
@@ -473,7 +458,7 @@
                 sessionKeyMaterial = tempMaterial;
                 resetBruteForce();
                 await initAlbums();
-                document.getElementById('pin-input').value = ''; // Biztonsági törlés
+                document.getElementById('pin-input').value = ''; 
                 msg.innerText = "";
                 showView('menu-view');
             } else { 
@@ -483,14 +468,13 @@
     }
 
     function logout() {
-        sessionKeyMaterial = null; // A kinyerhetetlen kulcs is megsemmisül!
+        sessionKeyMaterial = null; 
         albums = [];
         currentGalleryIds = [];
         document.getElementById('album-select').innerHTML = '<option value="ALL">Minden Kép</option>';
         showView('login-view');
     }
 
-    // --- FELTÖLTÉS ÉS GALÉRIA ---
     async function handleImage(event) {
         const files = event.target.files;
         if (!files.length) return;
@@ -637,7 +621,6 @@
         }
     }
 
-    // --- MAPPÁBA MOZGATÁS ---
     function showMoveModal() {
         if(albums.length === 0) { alert("Nincs még létrehozott mappád!\nCsinálj egyet a '+ Új' gombbal a galéria tetején."); return; }
         renderAlbumSelects();
@@ -673,13 +656,11 @@
         openGallery(); 
     }
 
-    // --- 4. DEDIKÁLT KÜLDÉSI JELSZÓ EXPORTÁLÁSKOR ---
     async function exportSelected() {
         const selected = document.querySelectorAll('#gallery-container input:checked');
         if (selected.length === 0) return;
 
-        // VÉDELEM: Megosztási jelszó kérése!
-        const expPw = prompt("🔒 KÜLDÉSI JELSZÓ LÉTREHOZÁSA:\n\nAdj meg egy tetszőleges, egyszerű jelszót (pl. Nyaralas26). A fogadó fél ezzel tudja majd beimportálni a képeket.\n\nFONTOS: NE a saját mesterjelszavadat add meg, mert az maradjon titokban!");
+        const expPw = prompt("🔒 KÜLDÉSI JELSZÓ LÉTREHOZÁSA:\n\nAdj meg egy tetszőleges jelszót. A fogadó fél ezzel tudja beimportálni a képeket.\n\nFONTOS: NE a saját mesterjelszavadat add meg!");
         if (!expPw) return;
 
         const exportBtn = document.getElementById('export-btn');
@@ -702,13 +683,11 @@
 
             if (!record) continue;
 
-            // Kibontjuk a saját kulcsunkkal
             let plainAlbumName = null;
             if (record.album) {
                 plainAlbumName = typeof record.album === 'string' ? record.album : await decryptText(record.album, sessionKeyMaterial);
             }
             
-            // TITKOSÍTJUK A KÜLDÉSI KULCCSAL
             let exportAlbumData = plainAlbumName ? await encryptText(plainAlbumName, exportKeyMaterial) : null;
             let serializableRecord = { version: 2, album: exportAlbumData };
             
@@ -763,7 +742,6 @@
         updateSelectionBtns();
     }
 
-    // --- BIZTONSÁGOS IMPORTÁLÁS ---
     let pendingImportData = null;
 
     function loadImportFile(event) {
@@ -786,7 +764,7 @@
     async function processImport() {
         if (!pendingImportData) { alert("Előbb válassz ki egy fájlt!"); return; }
         const senderPin = document.getElementById('import-pin').value;
-        if (!senderPin) { alert("Írd be a feladó jelszavát!"); return; }
+        if (!senderPin) { alert("Írd be a KÜLDÉSI jelszót!"); return; }
 
         const statusEl = document.getElementById('import-status');
         statusEl.innerText = "Feldolgozás és Átkódolás...";
@@ -808,13 +786,12 @@
                 const base64Full = dec.decode(decFullBuf);
                 const thumbBase64 = await generateThumbnail(base64Full);
                 
-                // Mappa visszafejtése a feladó kulcsával
                 let plainAlbumName = null;
                 if(record.album) {
                     plainAlbumName = await decryptText(record.album, senderMaterial);
                 }
 
-                // Újratitkosítás a saját mesterkulcsoddal
+                const enc = new TextEncoder();
                 const encryptedFull = await encryptData(decFullBuf, sessionKeyMaterial);
                 const encryptedThumb = await encryptData(enc.encode(thumbBase64), sessionKeyMaterial);
                 const myAlbumData = plainAlbumName ? await encryptText(plainAlbumName, sessionKeyMaterial) : null;

@@ -29,7 +29,6 @@
         .file-upload-wrapper input[type=file] { font-size: 100px; position: absolute; left: 0; top: 0; opacity: 0; cursor: pointer; height: 100%; }
         .file-upload-btn { background: var(--primary); color: white; padding: 15px; border-radius: 10px; font-size: 16px; font-weight: bold; display: block; width: 100%; box-sizing: border-box; }
         
-        /* Itt található a rácsos galéria kinézete, ami megmaradt */
         #gallery-container { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 80px; }
         .img-card { position: relative; width: 100%; height: 150px; border-radius: 10px; overflow: hidden; border: 1px solid #333; background: #222; }
         .img-card img { width: 100%; height: 100%; object-fit: cover; cursor: pointer; }
@@ -127,6 +126,7 @@
     };
     request.onsuccess = (e) => { db = e.target.result; };
 
+    // --- KRIPTOGRÁFIA (Bináris adat optimalizálás) ---
     async function deriveKey(password, salt) {
         const enc = new TextEncoder();
         const keyMaterial = await crypto.subtle.importKey("raw", enc.encode(password), {name: "PBKDF2"}, false, ["deriveBits", "deriveKey"]);
@@ -142,11 +142,14 @@
         const key = await deriveKey(password, salt);
         const enc = new TextEncoder();
         const encrypted = await crypto.subtle.encrypt({name: "AES-GCM", iv: iv}, key, enc.encode(dataString));
-        return { salt: Array.from(salt), iv: Array.from(iv), data: Array.from(new Uint8Array(encrypted)) }; 
+        
+        // Visszaállítottuk natív bináris formátumra, kiküszöbölve a memória-szivárgást!
+        return { salt: salt, iv: iv, data: new Uint8Array(encrypted) }; 
     }
 
     async function decryptData(encryptedObj, password) {
         try {
+            // Kompatibilitás a régi (Array) és az új (Uint8Array) képekkel is
             const salt = new Uint8Array(encryptedObj.salt);
             const iv = new Uint8Array(encryptedObj.iv);
             const data = new Uint8Array(encryptedObj.data);
@@ -199,7 +202,12 @@
 
         if (!localStorage.getItem('appSetup')) {
             const verificationToken = await encryptData("OK", pin);
-            localStorage.setItem('appSetup', JSON.stringify(verificationToken));
+            // A LocalStorage még mindig Array-t kér, de a DB-be már nyers bináris megy
+            localStorage.setItem('appSetup', JSON.stringify({
+                salt: Array.from(verificationToken.salt),
+                iv: Array.from(verificationToken.iv),
+                data: Array.from(verificationToken.data)
+            }));
             sessionKey = pin;
             showView('menu-view');
         } else {
@@ -258,54 +266,70 @@
         showView('menu-view');
     }
 
+    // --- GALÉRIA BETÖLTÉS (Garbage Collection barát megoldás) ---
     function openGallery() {
         showView('gallery-view');
         const container = document.getElementById('gallery-container');
-        container.innerHTML = '<p id="loading-text" style="grid-column: span 2;">Képek dekódolása folyamatban...</p>';
+        container.innerHTML = '<p id="loading-text" style="grid-column: span 2;">Képek betöltése...</p>';
         updateSelectionBtns();
         currentGalleryIds = []; 
 
         const transaction = db.transaction(['images'], 'readonly');
         const store = transaction.objectStore('images');
-        const request = store.openCursor();
+        const request = store.getAllKeys(); // Csak az ID-kat kérjük ki először!
 
         request.onsuccess = async (e) => {
-            const cursor = e.target.result;
+            const keys = e.target.result;
             
-            if (cursor) {
-                const record = cursor.value;
-                const dbKey = cursor.key;
-                
-                let dataToDecrypt = record;
-                if (record.version === 2) {
-                    dataToDecrypt = record.thumb; 
-                }
-
-                const base64Thumb = await decryptData(dataToDecrypt, sessionKey);
-                
-                if (base64Thumb) {
-                    const index = currentGalleryIds.length;
-                    currentGalleryIds.push(dbKey); 
-                    
-                    const card = document.createElement('div');
-                    card.className = 'img-card';
-                    card.innerHTML = `
-                        <input type="checkbox" value="${dbKey}" onchange="updateSelectionBtns()">
-                        <img src="${base64Thumb}" onclick="openFullscreen(${index})">
-                    `;
-                    container.appendChild(card);
-                }
-
-                cursor.continue();
-            } else {
-                const loadingText = document.getElementById('loading-text');
-                if(loadingText) loadingText.remove();
-                
-                if (currentGalleryIds.length === 0) {
-                    container.innerHTML = '<p style="grid-column: span 2;">Üres a galéria.</p>';
-                }
+            if (!keys || keys.length === 0) {
+                container.innerHTML = '<p style="grid-column: span 2;">Üres a galéria.</p>';
+                return;
             }
+
+            // Egyesével töltjük be a képeket, hagyva időt a memóriatakarításnak
+            for (let id of keys) {
+                await renderSingleThumbnail(id, container);
+                // Ez az apró, 10 ezredmásodperces szünet engedi a processzort fellélegezni
+                await new Promise(res => setTimeout(res, 10)); 
+            }
+
+            const loadingText = document.getElementById('loading-text');
+            if(loadingText) loadingText.remove();
         };
+    }
+
+    // Segédfüggvény: egyetlen kép lekérése önálló kapcsolatban
+    function renderSingleThumbnail(id, container) {
+        return new Promise((resolve) => {
+            const transaction = db.transaction(['images'], 'readonly');
+            const request = transaction.objectStore('images').get(id);
+
+            request.onsuccess = async (e) => {
+                const record = e.target.result;
+                if (record) {
+                    let dataToDecrypt = record;
+                    if (record.version === 2) {
+                        dataToDecrypt = record.thumb; 
+                    }
+
+                    const base64Thumb = await decryptData(dataToDecrypt, sessionKey);
+                    
+                    if (base64Thumb) {
+                        const index = currentGalleryIds.length;
+                        currentGalleryIds.push(id); 
+                        
+                        const card = document.createElement('div');
+                        card.className = 'img-card';
+                        card.innerHTML = `
+                            <input type="checkbox" value="${id}" onchange="updateSelectionBtns()">
+                            <img src="${base64Thumb}" onclick="openFullscreen(${index})">
+                        `;
+                        container.appendChild(card);
+                    }
+                }
+                resolve();
+            };
+        });
     }
 
     function updateSelectionBtns() {

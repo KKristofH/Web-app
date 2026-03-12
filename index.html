@@ -630,17 +630,19 @@ async function executeMove() {
 }
 
 // --- EXPORT ------------------------------------------------------------------
-// iOS Safari blocks navigator.share() after any await — the browser marks the
-// original tap gesture as "expired". Fix: run the full encryption pass first,
-// then replace the button label with "Tap to Share". That second tap is a
-// fresh user gesture, so iOS allows the share sheet to open.
+// navigator.canShare() is unreliable — it returns false for large files even
+// when iOS can share them fine. So we never use canShare as a gatekeeper.
+// Instead: encrypt everything (async), store the file, then show a
+// "Tap to share" button. That second tap is a fresh user gesture, which is
+// what iOS requires to allow navigator.share() to open the share sheet.
 let _pendingShareFile = null;
 
 async function exportSelected() {
     const selected = document.querySelectorAll('#gallery-container input:checked');
     if (!selected.length) return;
 
-    const exportPassword = prompt("Add meg az export jelszót.\n(A kapó ezt irja be importáláskor - lehet különböző a fő jelszavadtól.)");
+    const exportPassword = prompt("Add meg az export jelszót.
+(A kapó ezt irja be importáláskor - lehet különböző a fő jelszavadtól.)");
     if (!exportPassword) return;
 
     const exportBtn = document.getElementById('export-btn');
@@ -685,35 +687,34 @@ async function exportSelected() {
     blobParts.push("]");
     const blob = new Blob(blobParts, {type:'application/json'});
     _pendingShareFile = new File([blob], 'titkositott_kepek.json', {type:'application/json'});
-    exportBtn.disabled = false;
 
-    if (navigator.canShare && navigator.canShare({files:[_pendingShareFile]})) {
-        // Show a tap button — share MUST be called from a direct user tap on iOS
-        exportBtn.innerText = 'Koppints a küldéshez!';
-        exportBtn.onclick = doShare;
-    } else {
-        // Non-iOS: trigger download immediately
-        const url = URL.createObjectURL(_pendingShareFile);
-        const a = document.createElement('a');
-        a.href = url; a.download = 'titkositott_kepek.json'; a.click();
-        URL.revokeObjectURL(url);
-        _resetExportBtn();
-    }
+    exportBtn.disabled  = false;
+    exportBtn.innerText = 'Koppints a küldéshez!';
+    exportBtn.onclick   = _doShare;
 }
 
-// Called by the "Tap to share" button — this is a fresh user gesture so
-// iOS Safari allows navigator.share() to open the system share sheet.
-function doShare() {
+// Called by the "Tap to share" button.
+// This is a direct user tap — iOS allows navigator.share() here.
+// We never call canShare() because it lies about large files.
+function _doShare() {
     if (!_pendingShareFile) return;
-    navigator.share({files:[_pendingShareFile]})
-        .catch(e => { if (e.name !== 'AbortError') alert('Megosztási hiba: ' + e.message); })
-        .finally(() => _resetExportBtn());
+    navigator.share({files: [_pendingShareFile]})
+        .catch(err => {
+            if (err.name === 'AbortError') return; // user cancelled — leave button active
+            // share failed (e.g. no share targets) — fall back to download
+            const url = URL.createObjectURL(_pendingShareFile);
+            const a = document.createElement('a');
+            a.href = url; a.download = _pendingShareFile.name; a.click();
+            URL.revokeObjectURL(url);
+            _resetAfterExport();
+        })
+        .then(() => _resetAfterExport());
 }
 
-function _resetExportBtn() {
+function _resetAfterExport() {
     _pendingShareFile = null;
     document.querySelectorAll('#gallery-container input:checked').forEach(cb => cb.checked = false);
-    updateSelectionBtns(); // hides the button and resets onclick via re-render
+    updateSelectionBtns();
 }
 
 // --- IMPORT ------------------------------------------------------------------

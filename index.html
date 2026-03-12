@@ -15,7 +15,7 @@
         :root { --bg: #121212; --card: #1e1e1e; --text: #ffffff; --primary: #0a84ff; --danger: #ff453a; --success: #32d74b; --warning: #ff9f0a; }
         body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 20px; text-align: center; }
         
-        button, input { touch-action: manipulation; }
+        button, input, select { touch-action: manipulation; }
 
         .view { display: none; max-width: 500px; margin: 0 auto; padding-top: 20px; }
         .active { display: block; }
@@ -25,18 +25,29 @@
         button.secondary { background: #333; }
         button.danger { background: var(--danger); }
         button.warning { background: var(--warning); }
+        select { width: 100%; padding: 15px; border-radius: 10px; font-size: 16px; background: #333; color: white; border: none; margin-bottom: 15px; box-sizing: border-box; }
         
         .file-upload-wrapper { position: relative; overflow: hidden; display: inline-block; width: 100%; margin-bottom: 15px; }
         .file-upload-wrapper input[type=file] { font-size: 100px; position: absolute; left: 0; top: 0; opacity: 0; cursor: pointer; height: 100%; }
         .file-upload-btn { background: var(--primary); color: white; padding: 15px; border-radius: 10px; font-size: 16px; font-weight: bold; display: block; width: 100%; box-sizing: border-box; }
         
-        #gallery-container { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 80px; }
+        #gallery-header { display: flex; gap: 10px; align-items: center; margin-bottom: 15px; }
+        #gallery-header select { margin-bottom: 0; flex: 1; }
+        #gallery-header button { width: auto; margin-bottom: 0; padding: 12px 15px; }
+
+        #gallery-container { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 120px; }
         .img-card { position: relative; width: 100%; height: 150px; border-radius: 10px; overflow: hidden; border: 1px solid #333; background: #222; }
         .img-card img { width: 100%; height: 100%; object-fit: cover; cursor: pointer; }
         .img-card input[type="checkbox"] { position: absolute; top: 10px; right: 10px; width: 25px; height: 25px; z-index: 10; accent-color: var(--primary); }
         
-        .gallery-actions { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); width: 90%; max-width: 450px; display: flex; gap: 10px; z-index: 100; }
-        .gallery-actions button { margin-bottom: 0; font-size: 14px; padding: 10px; flex: 1; }
+        .gallery-actions { 
+            position: fixed; bottom: 0; left: 0; width: 100%; background: #1e1e1e; 
+            padding: 10px; box-sizing: border-box; display: flex; flex-wrap: wrap; gap: 5px; 
+            justify-content: center; z-index: 100; border-top: 1px solid #333;
+            padding-bottom: calc(env(safe-area-inset-bottom, 20px) + 10px);
+        }
+        .gallery-actions button { flex: 1 1 calc(30% - 10px); font-size: 13px; padding: 12px 5px; margin: 0; }
+        
         #status-msg { color: var(--success); font-size: 14px; margin-top: 10px; height: 20px; }
 
         #fullscreen-view { 
@@ -73,6 +84,14 @@
         <button class="danger" onclick="logout()">Kijelentkezés</button>
     </div>
 
+    <div id="move-view" class="view">
+        <h1>Áthelyezés mappába</h1>
+        <p style="color: gray; font-size: 14px;">Hova szeretnéd áthelyezni a kijelölt képeket?</p>
+        <select id="move-album-select"></select>
+        <button onclick="executeMove()">Áthelyezés</button>
+        <button class="secondary" onclick="showView('gallery-view')">Mégsem</button>
+    </div>
+
     <div id="import-view" class="view">
         <h1>📥 Importálás</h1>
         <p style="font-size: 14px; color: gray;">Válaszd ki a kapott titkosított fájlt, majd add meg a feladó jelszavát!</p>
@@ -100,10 +119,20 @@
     </div>
 
     <div id="gallery-view" class="view">
-        <h1>Titkos Képeim</h1>
+        <div id="gallery-header">
+            <select id="album-select" onchange="changeAlbum()">
+                <option value="ALL">Minden Kép</option>
+            </select>
+            <button onclick="createAlbum()">+ Új</button>
+            <button id="del-album-btn" class="danger" onclick="deleteAlbum()" style="display:none;">Törlés</button>
+        </div>
+
         <div id="gallery-container"></div>
+        
         <div class="gallery-actions">
             <button class="secondary" onclick="showView('menu-view')">Vissza</button>
+            <button class="secondary" id="select-all-btn" onclick="toggleSelectAll()">Összes kijelölése</button>
+            <button class="primary" id="move-btn" style="display:none;" onclick="showMoveModal()">Mozgatás</button>
             <button class="warning" id="export-btn" style="display:none;" onclick="exportSelected()">Küldés</button>
             <button class="danger" id="delete-btn" style="display:none;" onclick="deleteSelected()">Törlés</button>
         </div>
@@ -135,6 +164,10 @@
     let db;
     let currentGalleryIds = []; 
     let currentImgIndex = 0;       
+    let isAllSelected = false;
+
+    // Mappák betöltése a memóriából
+    let albums = JSON.parse(localStorage.getItem('gallery_albums') || '[]');
 
     const request = indexedDB.open("SecureGalleryDB", 1);
     request.onupgradeneeded = (e) => {
@@ -145,6 +178,73 @@
     };
     request.onsuccess = (e) => { db = e.target.result; };
 
+    function saveAlbums() {
+        localStorage.setItem('gallery_albums', JSON.stringify(albums));
+    }
+
+    function renderAlbumSelects() {
+        const mainSelect = document.getElementById('album-select');
+        const moveSelect = document.getElementById('move-album-select');
+        
+        mainSelect.innerHTML = '<option value="ALL">Minden Kép</option>';
+        moveSelect.innerHTML = '';
+
+        albums.forEach(a => {
+            mainSelect.innerHTML += `<option value="${a}">${a}</option>`;
+            moveSelect.innerHTML += `<option value="${a}">${a}</option>`;
+        });
+    }
+
+    function createAlbum() {
+        const name = prompt("Mappa neve:");
+        if(!name || name.trim() === '') return;
+        if(albums.includes(name.trim())) { alert("Ez a mappa már létezik!"); return; }
+        
+        albums.push(name.trim());
+        saveAlbums();
+        renderAlbumSelects();
+        
+        document.getElementById('album-select').value = name.trim();
+        changeAlbum();
+    }
+
+    async function deleteAlbum() {
+        const sel = document.getElementById('album-select').value;
+        if (sel === 'ALL') return;
+        if (!confirm(`Biztosan törlöd a "${sel}" mappát?\n\nA benne lévő képek nem törlődnek, csak visszakerülnek a Minden Kép közé!`)) return;
+
+        albums = albums.filter(a => a !== sel);
+        saveAlbums();
+
+        // Képek "kiszabadítása" a törölt mappából
+        const transaction = db.transaction(['images'], 'readwrite');
+        const store = transaction.objectStore('images');
+        const req = store.openCursor();
+        
+        req.onsuccess = e => {
+            const cursor = e.target.result;
+            if(cursor) {
+                if(cursor.value.album === sel) {
+                    const rec = cursor.value;
+                    rec.album = null; // Vissza a Minden Képbe
+                    cursor.update(rec);
+                }
+                cursor.continue();
+            } else {
+                renderAlbumSelects();
+                document.getElementById('album-select').value = 'ALL';
+                changeAlbum();
+            }
+        };
+    }
+
+    function changeAlbum() {
+        const sel = document.getElementById('album-select').value;
+        document.getElementById('del-album-btn').style.display = (sel !== 'ALL') ? 'block' : 'none';
+        openGallery(); 
+    }
+
+    // --- ALAP SEGÉDFÜGGVÉNYEK ---
     function bufferToBase64(buf) {
         return new Promise(resolve => {
             const reader = new FileReader();
@@ -153,7 +253,6 @@
         });
     }
 
-    // Visszaállított, letisztult dekódoló algoritmus
     function base64ToBuffer(b64) {
         const binstr = atob(b64);
         const buf = new Uint8Array(binstr.length);
@@ -163,12 +262,9 @@
         return buf;
     }
 
-    // EXTRA VÉDELEM EXPORTÁLÁSHOZ (A jövőben is golyóálló marad)
     async function getBase64Safe(data) {
         let safeData = data;
-        if (Array.isArray(data)) {
-            safeData = new Uint8Array(data); 
-        }
+        if (Array.isArray(data)) { safeData = new Uint8Array(data); }
         return await bufferToBase64(safeData);
     }
 
@@ -227,6 +323,7 @@
         if(!localStorage.getItem('appSetup')) {
             document.getElementById('login-text').innerText = "Hozd létre a mesterjelszavad";
         }
+        renderAlbumSelects();
     };
 
     function showView(viewId) {
@@ -284,7 +381,8 @@
                     const encryptedFull = await encryptData(originalBase64, sessionKey);
                     const encryptedThumb = await encryptData(thumbBase64, sessionKey);
                     
-                    const payload = { version: 2, full: encryptedFull, thumb: encryptedThumb };
+                    // Új kép mentése a gyökérbe (nincs mappa)
+                    const payload = { version: 2, full: encryptedFull, thumb: encryptedThumb, album: null };
                     const transaction = db.transaction(['images'], 'readwrite');
                     transaction.objectStore('images').add(payload);
                     transaction.oncomplete = resolve;
@@ -303,8 +401,12 @@
         showView('gallery-view');
         const container = document.getElementById('gallery-container');
         container.innerHTML = '<p id="loading-text" style="grid-column: span 2;">Képek betöltése...</p>';
+        
+        isAllSelected = false; // Reset kijelölés
         updateSelectionBtns();
         currentGalleryIds = []; 
+
+        const currentAlbum = document.getElementById('album-select').value;
 
         const transaction = db.transaction(['images'], 'readonly');
         const store = transaction.objectStore('images');
@@ -317,15 +419,19 @@
                 return;
             }
             for (let id of keys) {
-                await renderSingleThumbnail(id, container);
+                await renderSingleThumbnail(id, container, currentAlbum);
                 await new Promise(res => setTimeout(res, 10)); 
             }
             const loadingText = document.getElementById('loading-text');
             if(loadingText) loadingText.remove();
+            
+            if(currentGalleryIds.length === 0) {
+                container.innerHTML = '<p style="grid-column: span 2;">Ebben a mappában nincsenek képek.</p>';
+            }
         };
     }
 
-    function renderSingleThumbnail(id, container) {
+    function renderSingleThumbnail(id, container, currentAlbum) {
         return new Promise((resolve) => {
             const transaction = db.transaction(['images'], 'readonly');
             const request = transaction.objectStore('images').get(id);
@@ -333,6 +439,12 @@
             request.onsuccess = async (e) => {
                 const record = e.target.result;
                 if (record) {
+                    const recAlbum = record.album || 'ALL';
+                    // Csak a szűrt mappának megfelelő képeket dekódoljuk
+                    if (currentAlbum !== 'ALL' && recAlbum !== currentAlbum) {
+                        resolve(); return; 
+                    }
+                    
                     let dataToDecrypt = record.version === 2 ? record.thumb : record;
                     const base64Thumb = await decryptData(dataToDecrypt, sessionKey);
                     
@@ -350,22 +462,82 @@
         });
     }
 
+    // --- KIJELÖLÉS KEZELÉSE ---
+    function toggleSelectAll() {
+        const checkboxes = document.querySelectorAll('#gallery-container input[type="checkbox"]');
+        isAllSelected = !isAllSelected;
+        checkboxes.forEach(cb => cb.checked = isAllSelected);
+        updateSelectionBtns();
+    }
+
     function updateSelectionBtns() {
         const selected = document.querySelectorAll('#gallery-container input:checked');
+        const allBoxes = document.querySelectorAll('#gallery-container input[type="checkbox"]');
+        
         const delBtn = document.getElementById('delete-btn');
         const expBtn = document.getElementById('export-btn');
+        const moveBtn = document.getElementById('move-btn');
+        const selectAllBtn = document.getElementById('select-all-btn');
+        
+        // Gomb szövegének okos beállítása
+        if (selected.length === allBoxes.length && allBoxes.length > 0) {
+            isAllSelected = true;
+            selectAllBtn.innerText = "Kijelölés törlése";
+        } else {
+            isAllSelected = false;
+            selectAllBtn.innerText = "Összes kijelölése";
+        }
         
         if (selected.length > 0) {
             delBtn.style.display = 'block';
             expBtn.style.display = 'block';
+            moveBtn.style.display = 'block';
             delBtn.innerText = `Törlés (${selected.length})`;
             expBtn.innerText = `Küldés (${selected.length})`;
+            moveBtn.innerText = `Mozgatás (${selected.length})`;
         } else {
             delBtn.style.display = 'none';
             expBtn.style.display = 'none';
+            moveBtn.style.display = 'none';
         }
     }
 
+    // --- MOZGATÁS (MAPPÁZÁS) ---
+    function showMoveModal() {
+        if(albums.length === 0) { alert("Nincs még létrehozott mappád!\nCsinálj egyet a '+ Új' gombbal."); return; }
+        renderAlbumSelects();
+        showView('move-view');
+    }
+
+    async function executeMove() {
+        const targetAlbum = document.getElementById('move-album-select').value;
+        const selected = document.querySelectorAll('#gallery-container input:checked');
+        
+        const transaction = db.transaction(['images'], 'readwrite');
+        const store = transaction.objectStore('images');
+        
+        let movedCount = 0;
+        for (let cb of selected) {
+            const id = Number(cb.value);
+            await new Promise(resolve => {
+                const req = store.get(id);
+                req.onsuccess = e => {
+                    const rec = e.target.result;
+                    if(rec) {
+                        rec.album = targetAlbum; // Módosítjuk a láthatatlan címkét
+                        store.put(rec, id).onsuccess = resolve;
+                    } else { resolve(); }
+                }
+            });
+            movedCount++;
+        }
+        
+        alert(`${movedCount} kép áthelyezve ide: ${targetAlbum}`);
+        showView('gallery-view');
+        openGallery(); 
+    }
+
+    // --- EXPORTÁLÁS ---
     async function exportSelected() {
         const selected = document.querySelectorAll('#gallery-container input:checked');
         if (selected.length === 0) return;
@@ -389,7 +561,8 @@
 
             if (!record) continue;
 
-            let serializableRecord = { version: record.version };
+            // Kimentjük a mappa nevet is a fájlba
+            let serializableRecord = { version: record.version, album: record.album || null };
             
             if (record.version === 2) {
                 serializableRecord.full = {
@@ -469,7 +642,7 @@
         if (!senderPin) { alert("Írd be a feladó jelszavát!"); return; }
 
         const statusEl = document.getElementById('import-status');
-        statusEl.innerText = "Feldolgozás és Átkódolás folyamatban...";
+        statusEl.innerText = "Feldolgozás és Átkódolás...";
 
         let successCount = 0; let failCount = 0;
 
@@ -497,7 +670,19 @@
                 const encryptedFull = await encryptData(base64Full, sessionKey);
                 const encryptedThumb = await encryptData(thumbBase64, sessionKey);
                 
-                const payload = { version: 2, full: encryptedFull, thumb: encryptedThumb };
+                // Visszatöltjük a fájlba mentett mappa nevét is
+                const payload = { 
+                    version: 2, 
+                    full: encryptedFull, 
+                    thumb: encryptedThumb, 
+                    album: record.album || null 
+                };
+
+                // Ha olyan mappa jött az importtal, ami eddig nem volt a telefonon, hozzuk létre!
+                if (record.album && !albums.includes(record.album)) {
+                    albums.push(record.album);
+                    saveAlbums();
+                }
 
                 await new Promise(resolve => {
                     const transaction = db.transaction(['images'], 'readwrite');
@@ -514,7 +699,8 @@
         document.getElementById('import-filename').innerText = '';
         pendingImportData = null;
 
-        alert(`Importálás befejezve!\nSikeresen importálva: ${successCount} kép\nHibás jelszó miatt elutasítva: ${failCount} kép`);
+        alert(`Importálás befejezve!\nSikeres: ${successCount}\nHibás jelszó: ${failCount}`);
+        renderAlbumSelects(); // Frissíti a menüt, ha új mappa jött létre
         showView('menu-view');
     }
 

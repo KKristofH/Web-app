@@ -74,7 +74,7 @@
     </div>
 
     <div id="import-view" class="view">
-        <h1>📥 Importálás</h1>
+        <h1>📥 Importálás (Helyreállító)</h1>
         <p style="font-size: 14px; color: gray;">Válaszd ki a kapott titkosított fájlt, majd add meg a feladó jelszavát!</p>
         
         <div class="file-upload-wrapper">
@@ -153,13 +153,35 @@
         });
     }
 
-    function base64ToBuffer(b64) {
-        const binstr = atob(b64);
-        const buf = new Uint8Array(binstr.length);
-        for (let i = 0; i < binstr.length; i++) {
-            buf[i] = binstr.charCodeAt(i);
+    // EXTRA VÉDELEM EXPORTÁLÁSHOZ (Soha többé nem csinál rossz fájlt)
+    async function getBase64Safe(data) {
+        let safeData = data;
+        if (Array.isArray(data)) {
+            safeData = new Uint8Array(data); 
         }
-        return buf;
+        return await bufferToBase64(safeData);
+    }
+
+    // AUTOMATA HIBAJAVÍTÓ MOTOR IMPORTÁLÁSHOZ (A megmentő kód)
+    function base64ToBuffer(b64) {
+        try {
+            const binstr = atob(b64);
+            
+            // Érzékeli a régi, elrontott szöveges formátumot
+            if (binstr.indexOf(',') !== -1 && /^[0-9,]+$/.test(binstr.substring(0, 50))) {
+                const numArr = binstr.split(',').map(Number);
+                return new Uint8Array(numArr); // Visszaalakítja hibátlan adattá!
+            }
+
+            // Normál, tökéletes fájlok beolvasása
+            const buf = new Uint8Array(binstr.length);
+            for (let i = 0; i < binstr.length; i++) {
+                buf[i] = binstr.charCodeAt(i);
+            }
+            return buf;
+        } catch(e) {
+            return new Uint8Array(0);
+        }
     }
 
     async function deriveKey(password, salt) {
@@ -356,7 +378,6 @@
         }
     }
 
-    // --- SZÖVEG MENTES EXPORT ---
     async function exportSelected() {
         const selected = document.querySelectorAll('#gallery-container input:checked');
         if (selected.length === 0) return;
@@ -386,18 +407,18 @@
                 serializableRecord.full = {
                     salt: Array.from(record.full.salt),
                     iv: Array.from(record.full.iv),
-                    data: await bufferToBase64(record.full.data)
+                    data: await getBase64Safe(record.full.data) 
                 };
                 serializableRecord.thumb = {
                     salt: Array.from(record.thumb.salt),
                     iv: Array.from(record.thumb.iv),
-                    data: await bufferToBase64(record.thumb.data)
+                    data: await getBase64Safe(record.thumb.data)
                 };
             } else {
                 serializableRecord = {
                     salt: Array.from(record.salt),
                     iv: Array.from(record.iv),
-                    data: await bufferToBase64(record.data)
+                    data: await getBase64Safe(record.data)
                 };
             }
 
@@ -418,7 +439,6 @@
         const blob = new Blob(blobParts, { type: 'application/json' });
         const file = new File([blob], 'titkositott_kepek.json', { type: 'application/json' });
 
-        // Csak a fájlt adjuk át az iOS Share Sheet-nek, a "text" és a "title" ki van törölve!
         if (navigator.canShare && navigator.canShare({ files: [file] })) {
             navigator.share({
                 files: [file]
@@ -461,7 +481,7 @@
         if (!senderPin) { alert("Írd be a feladó jelszavát!"); return; }
 
         const statusEl = document.getElementById('import-status');
-        statusEl.innerText = "Feldolgozás és Átkódolás...";
+        statusEl.innerText = "Adatok helyreállítása...";
 
         let successCount = 0; let failCount = 0;
 
@@ -506,7 +526,7 @@
         document.getElementById('import-filename').innerText = '';
         pendingImportData = null;
 
-        alert(`Importálás befejezve!\nSikeres: ${successCount}\nHibás jelszó: ${failCount}`);
+        alert(`Művelet befejezve!\nSikeresen helyreállítva: ${successCount} kép\nHibás jelszó: ${failCount}`);
         showView('menu-view');
     }
 

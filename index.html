@@ -350,6 +350,18 @@
             }
         }
         renderAlbumSelects();
+
+        // Mappamemória: Visszatöltjük a legutóbb használt mappát!
+        const lastSel = localStorage.getItem('last_album') || 'ALL';
+        if (lastSel === 'ALL' || albums.includes(lastSel)) {
+            document.getElementById('album-select').value = lastSel;
+        } else {
+            document.getElementById('album-select').value = 'ALL';
+        }
+        
+        // Gomb láthatóságának beállítása
+        const currentSel = document.getElementById('album-select').value;
+        document.getElementById('del-album-btn').style.display = (currentSel !== 'ALL') ? 'block' : 'none';
     }
 
     async function saveAlbums() {
@@ -361,8 +373,10 @@
     function renderAlbumSelects() {
         const mainSelect = document.getElementById('album-select');
         const moveSelect = document.getElementById('move-album-select');
+        
         mainSelect.innerHTML = '<option value="ALL">Minden Kép</option>';
-        moveSelect.innerHTML = '';
+        moveSelect.innerHTML = '<option value="ALL">Minden Kép (Kivétel a mappából)</option>'; // ÚJ FUNKCIÓ!
+        
         albums.forEach(a => {
             mainSelect.innerHTML += `<option value="${a}">${a}</option>`;
             moveSelect.innerHTML += `<option value="${a}">${a}</option>`;
@@ -418,6 +432,7 @@
 
     function changeAlbum() {
         const sel = document.getElementById('album-select').value;
+        localStorage.setItem('last_album', sel); // Mappamemória mentése
         document.getElementById('del-album-btn').style.display = (sel !== 'ALL') ? 'block' : 'none';
         openGallery(); 
     }
@@ -476,7 +491,7 @@
         sessionKeyMaterial = null; 
         albums = [];
         currentGalleryIds = [];
-        document.getElementById('album-select').innerHTML = '<option value="ALL">Minden Kép</option>';
+        // Nem reseteljük az utolsó mappát, így legközelebb is onnan folytatod!
         showView('login-view');
     }
 
@@ -627,53 +642,66 @@
     }
 
     function showMoveModal() {
-        if(albums.length === 0) { alert("Nincs még létrehozott mappád!\nCsinálj egyet a '+ Új' gombbal a galéria tetején."); return; }
+        // Most már mindig nyitható, ha kivesszük a mappából!
         renderAlbumSelects();
         showView('move-view');
     }
 
+    // A JAVÍTOTT ÁTHELYEZŐ MOTOR
     async function executeMove() {
         const targetAlbum = document.getElementById('move-album-select').value;
-        const selected = document.querySelectorAll('#gallery-container input:checked');
+        const selectedElements = document.querySelectorAll('#gallery-container input:checked');
         
-        const transaction = db.transaction(['images'], 'readwrite');
-        const store = transaction.objectStore('images');
-        const encAlbumData = await encryptText(targetAlbum, sessionKeyMaterial);
+        // Először megcsináljuk az async titkosítást (Kivárjuk, mielőtt ajtót nyitunk az adatbázisnak!)
+        let encAlbumData = null;
+        if (targetAlbum !== 'ALL') {
+            encAlbumData = await encryptText(targetAlbum, sessionKeyMaterial);
+        }
         
         let movedCount = 0;
-        for (let cb of selected) {
+        
+        // Majd utána nyitjuk az adatbázist, minden képnél egyesével, tisztán.
+        for (let cb of selectedElements) {
             const id = Number(cb.value);
-            await new Promise(resolve => {
+            
+            await new Promise((resolve, reject) => {
+                const transaction = db.transaction(['images'], 'readwrite');
+                const store = transaction.objectStore('images');
                 const req = store.get(id);
+                
                 req.onsuccess = e => {
                     const rec = e.target.result;
                     if(rec) {
-                        rec.album = encAlbumData; 
+                        rec.album = encAlbumData; // Itt adjuk át az új (titkosított vagy üres) mappa nevet
                         store.put(rec, id).onsuccess = resolve;
-                    } else { resolve(); }
-                }
+                    } else { 
+                        resolve(); 
+                    }
+                };
+                req.onerror = reject;
             });
             movedCount++;
         }
         
-        alert(`${movedCount} kép áthelyezve ide: ${targetAlbum}`);
+        let folderName = targetAlbum === 'ALL' ? 'Minden Kép' : targetAlbum;
+        alert(`${movedCount} kép áthelyezve ide: ${folderName}`);
+        
         showView('gallery-view');
         openGallery(); 
     }
 
-    // --- AZ ÚJ, KÉTLÉPCSŐS EXPORTÁLÁS ---
     let pendingExportFile = null;
 
     async function exportSelected() {
         const selected = document.querySelectorAll('#gallery-container input:checked');
         if (selected.length === 0) return;
 
-        const expPw = prompt("🔒 KÜLDÉSI JELSZÓ LÉTREHOZÁSA:\n\nAdj meg egy tetszőleges jelszót. A fogadó fél ezzel tudja beimportálni a képeket.");
+        const expPw = prompt("🔒 KÜLDÉSI JELSZÓ LÉTREHOZÁSA:\n\nAdj meg egy tetszőleges jelszót. A fogadó fél ezzel tudja beimportálni a képeket.\n\nFONTOS: NE a saját mesterjelszavadat add meg!");
         if (!expPw) return;
 
         const exportBtn = document.getElementById('export-btn');
         exportBtn.innerText = "Csomagolás (0%)...";
-        exportBtn.disabled = true; // Gomb ideiglenes letiltása csomagolás alatt
+        exportBtn.disabled = true; 
         
         const exportKeyMaterial = await getMasterKeyMaterial(expPw);
         let blobParts = ["["];
@@ -733,13 +761,12 @@
         blobParts.push("]");
         
         const blob = new Blob(blobParts, { type: 'application/json' });
-        pendingExportFile = new File([blob], 'titkositott_kepek.json', { type: 'application/json' });
+        pendingExportFile = new File([blob], 'ssssh.json', { type: 'application/json' });
 
-        // Felkészítjük a gombot az AZONNALI kattintásra az iOS miatt!
         exportBtn.disabled = false;
         exportBtn.innerText = "📦 Kész! Kattints a megosztáshoz";
         exportBtn.style.background = "var(--success)";
-        exportBtn.onclick = executeShareSheet; // Kicseréljük a gomb funkcióját
+        exportBtn.onclick = executeShareSheet; 
     }
 
     function executeShareSheet() {
@@ -756,7 +783,7 @@
             const url = URL.createObjectURL(pendingExportFile);
             const a = document.createElement('a');
             a.href = url;
-            a.download = 'titkositott_kepek.json';
+            a.download = 'ssssh.json';
             a.click();
             URL.revokeObjectURL(url);
             resetExportUI();
@@ -768,8 +795,8 @@
         document.querySelectorAll('#gallery-container input:checked').forEach(cb => cb.checked = false);
         
         const exportBtn = document.getElementById('export-btn');
-        exportBtn.style.background = "var(--warning)"; // Visszaállítjuk a színt
-        exportBtn.onclick = exportSelected; // Visszaállítjuk az eredeti funkciót
+        exportBtn.style.background = "var(--warning)"; 
+        exportBtn.onclick = exportSelected; 
         
         updateSelectionBtns();
     }

@@ -54,13 +54,14 @@
         #status-msg { font-size: 14px; margin-top: 10px; min-height: 20px; }
         #lockout-msg { color: var(--danger); font-size: 16px; font-weight: bold; margin-bottom: 15px; display: none; }
 
+        /* LÁTHATATLAN TITKOS PONT */
         #secret-dot {
             position: absolute;
             top: 20px;
             right: 20px;
             width: 40px;
             height: 40px;
-            background-color: red; /* Később állítsd transparent-re */
+            background-color: transparent; /* Teljesen láthatatlan lett */
             border-radius: 50%;
             z-index: 1000;
         }
@@ -568,13 +569,16 @@
     function openNotes() {
         showView('notes-view');
         isAllNotesSelected = false;
-        updateNoteSelectionBtns();
+        // Azonnali lista törlés a szellem-kijelölés elkerülése miatt!
+        document.getElementById('notes-list').innerHTML = ''; 
+        updateNoteSelectionBtns(); 
         loadNotes();
     }
 
     async function loadNotes() {
         const list = document.getElementById('notes-list');
-        list.innerHTML = 'Jegyzetek betöltése...';
+        list.innerHTML = '<p style="color:gray;">Jegyzetek betöltése...</p>';
+        updateNoteSelectionBtns(); // Gombok elrejtése töltés alatt
         
         const transaction = db.transaction(['notes'], 'readonly');
         const store = transaction.objectStore('notes');
@@ -586,12 +590,14 @@
             
             if (!keys || keys.length === 0) {
                 list.innerHTML = '<p style="color:gray;">Még nincsenek titkos jegyzeteid.</p>';
+                updateNoteSelectionBtns();
                 return;
             }
             
             for (let id of keys) {
                 await renderNoteItem(id, list);
             }
+            updateNoteSelectionBtns(); // Gombok frissítése a renderelés végén
         };
     }
 
@@ -905,6 +911,7 @@
     function openGallery() {
         showView('gallery-view');
         const container = document.getElementById('gallery-container');
+        // Kijelölés biztos ürítése a frissítés előtt
         container.innerHTML = '<p id="loading-text" style="grid-column: span 2;">Képek betöltése...</p>';
         
         isAllSelected = false; 
@@ -1262,7 +1269,6 @@
         updateSelectionBtns();
     }
 
-    // --- IMPORTÁLÁS (Képek és Jegyzetek kezelése is) ---
     let pendingImportData = null;
 
     function loadImportFile(event) {
@@ -1295,7 +1301,6 @@
 
         for (let record of pendingImportData) {
             try {
-                // JEGYZET IMPORTÁLÁS LOGIKA
                 if (record.type === 'note') {
                     const plainTitle = await decryptText(record.title, senderMaterial);
                     const plainContent = await decryptText(record.content, senderMaterial);
@@ -1316,7 +1321,6 @@
                         failCount++;
                     }
                 } 
-                // KÉP IMPORTÁLÁS LOGIKA
                 else {
                     let exportedFull, exportedThumb;
                     if (record.version === 2) {

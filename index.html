@@ -1032,7 +1032,7 @@
         blobParts.push("]");
         
         const blob = new Blob(blobParts, { type: 'application/json' });
-        pendingExportFile = new File([blob], 'titkositott_kepek.json', { type: 'application/json' });
+        pendingExportFile = new File([blob], 'rjsocis.json', { type: 'application/json' });
 
         exportBtn.disabled = false;
         exportBtn.innerText = "📦 Kész! Kattints a megosztáshoz";
@@ -1054,7 +1054,7 @@
             const url = URL.createObjectURL(pendingExportFile);
             const a = document.createElement('a');
             a.href = url;
-            a.download = 'titkositott_kepek.json';
+            a.download = 'rjsocis.json';
             a.click();
             URL.revokeObjectURL(url);
             resetExportUI();

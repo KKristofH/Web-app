@@ -12,7 +12,7 @@
     <link rel="apple-touch-icon" href="./appstore.png">
     
     <style>
-        :root { --bg: #121212; --card: #1e1e1e; --text: #ffffff; --primary: #0a84ff; --danger: #ff453a; --success: #32d74b; --warning: #ff9f0a; }
+        :root { --bg: #121212; --card: #1e1e1e; --text: #ffffff; --primary: #0a84ff; --danger: #ff453a; --success: #32d74b; --warning: #ff9f0a; --info: #30d158; }
         body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 20px; text-align: center; }
         
         button, input, select, textarea { touch-action: manipulation; }
@@ -27,6 +27,7 @@
         button.secondary { background: #333; }
         button.danger { background: var(--danger); }
         button.warning { background: var(--warning); }
+        button.info { background: var(--info); }
         select { width: 100%; padding: 15px; border-radius: 10px; font-size: 16px; background: #333; color: white; border: none; margin-bottom: 15px; box-sizing: border-box; }
         
         .file-upload-wrapper { position: relative; overflow: hidden; display: inline-block; width: 100%; margin-bottom: 15px; }
@@ -37,7 +38,7 @@
         #gallery-header select { margin-bottom: 0; flex: 1; }
         #gallery-header button { width: auto; margin-bottom: 0; padding: 12px 15px; }
 
-        #gallery-container { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 120px; }
+        #gallery-container { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 150px; }
         .img-card { position: relative; width: 100%; height: 150px; border-radius: 10px; overflow: hidden; border: 1px solid #333; background: #222; }
         .img-card img { width: 100%; height: 100%; object-fit: cover; cursor: pointer; }
         .img-card input[type="checkbox"] { position: absolute; top: 10px; right: 10px; width: 25px; height: 25px; z-index: 10; accent-color: var(--primary); }
@@ -48,19 +49,20 @@
             justify-content: center; z-index: 100; border-top: 1px solid #333;
             padding-bottom: calc(env(safe-area-inset-bottom, 20px) + 10px);
         }
-        .gallery-actions button { flex: 1 1 calc(30% - 10px); font-size: 13px; padding: 12px 5px; margin: 0; }
+        /* Módosított gomb elrendezés, hogy elférjen a sok gomb */
+        .gallery-actions button { flex: 1 1 calc(33% - 10px); font-size: 12px; padding: 10px 5px; margin: 0; }
         
         #status-msg { font-size: 14px; margin-top: 10px; min-height: 20px; }
         #lockout-msg { color: var(--danger); font-size: 16px; font-weight: bold; margin-bottom: 15px; display: none; }
 
-        /* A TITKOS PONT KINÉZETE */
+        /* LÁTHATATLAN TITKOS PONT */
         #secret-dot {
             position: absolute;
             top: 20px;
             right: 20px;
-            width: 30px;
-            height: 30px;
-            background-color: red; /* Később ezt írjuk át 'transparent'-re */
+            width: 40px;
+            height: 40px;
+            background-color: transparent; /* LÁTHATATLAN! */
             border-radius: 50%;
             z-index: 1000;
         }
@@ -168,8 +170,9 @@
         
         <div class="gallery-actions">
             <button class="secondary" onclick="showView('menu-view')">Vissza</button>
-            <button class="secondary" id="select-all-btn" onclick="toggleSelectAll()">Összes kijelölése</button>
+            <button class="secondary" id="select-all-btn" onclick="toggleSelectAll()">Mindet kijelöl</button>
             <button class="primary" id="move-btn" style="display:none;" onclick="showMoveModal()">Mozgatás</button>
+            <button class="info" id="save-original-btn" style="display:none;" onclick="saveOriginals()">Kimentés</button>
             <button class="warning" id="export-btn" style="display:none;" onclick="exportSelected()">Küldés</button>
             <button class="danger" id="delete-btn" style="display:none;" onclick="deleteSelected()">Törlés</button>
         </div>
@@ -205,7 +208,6 @@
     let albums = [];
     let lockoutInterval = null;
 
-    // ADATBÁZIS VERZIÓ FRISSÍTÉSE (v2) - Hozzáadja a Jegyzetek táblát!
     const request = indexedDB.open("SecureGalleryDB", 2);
     request.onupgradeneeded = (e) => {
         let db = e.target.result;
@@ -213,7 +215,7 @@
             db.createObjectStore('images', { autoIncrement: true });
         }
         if (!db.objectStoreNames.contains('notes')) {
-            db.createObjectStore('notes', { autoIncrement: true }); // Új tábla a jegyzeteknek
+            db.createObjectStore('notes', { autoIncrement: true }); 
         }
     };
     request.onsuccess = (e) => { db = e.target.result; };
@@ -243,6 +245,16 @@
         let safeData = data;
         if (Array.isArray(data)) { safeData = new Uint8Array(data); }
         return await bufferToBase64(safeData);
+    }
+
+    // ÚJ: Képadat konvertálása File objektummá a kimentéshez
+    function dataURLtoFile(dataurl, filename) {
+        var arr = dataurl.split(','), mime = arr[0].match(/:(.*?);/)[1],
+            bstr = atob(arr[1]), n = bstr.length, u8arr = new Uint8Array(n);
+        while(n--){
+            u8arr[n] = bstr.charCodeAt(n);
+        }
+        return new File([u8arr], filename, {type:mime});
     }
 
     async function getMasterKeyMaterial(password) {
@@ -530,21 +542,18 @@
         showView('login-view');
     }
 
-    // --- TITKOS JEGYZETEK MOTORJA ---
-    
     let tapCount = 0;
     let tapTimer = null;
 
-    // A tripla kattintás logikája
     function handleSecretTap() {
         tapCount++;
         if (tapCount === 3) {
             tapCount = 0;
             clearTimeout(tapTimer);
-            openNotes(); // Megnyitja a titkos menüt!
+            openNotes(); 
         } else {
             clearTimeout(tapTimer);
-            tapTimer = setTimeout(() => { tapCount = 0; }, 800); // 0.8 mp van a 3 kattintásra
+            tapTimer = setTimeout(() => { tapCount = 0; }, 800); 
         }
     }
 
@@ -587,7 +596,6 @@
             req.onsuccess = async (e) => {
                 const record = e.target.result;
                 if (record) {
-                    // Cím dekódolása
                     const plainTitle = await decryptText(record.title, sessionKeyMaterial) || "Névtelen jegyzet";
                     
                     const div = document.createElement('div');
@@ -609,7 +617,6 @@
         document.getElementById('note-content').value = '';
         showView('note-editor-view');
 
-        // Ha meglévő jegyzetet nyitunk meg, visszatöltjük és dekódoljuk
         if (id !== null) {
             const transaction = db.transaction(['notes'], 'readonly');
             const store = transaction.objectStore('notes');
@@ -632,7 +639,6 @@
         const title = document.getElementById('note-title').value || "Névtelen jegyzet";
         const content = document.getElementById('note-content').value || "";
 
-        // Biztonságos titkosítás
         const encTitle = await encryptText(title, sessionKeyMaterial);
         const encContent = await encryptText(content, sessionKeyMaterial);
 
@@ -642,13 +648,13 @@
         const store = transaction.objectStore('notes');
 
         if (currentNoteId !== null) {
-            store.put(payload, currentNoteId); // Meglévő frissítése
+            store.put(payload, currentNoteId); 
         } else {
-            store.add(payload); // Új létrehozása
+            store.add(payload); 
         }
 
         transaction.oncomplete = () => {
-            openNotes(); // Vissza a listába
+            openNotes(); 
         };
     }
 
@@ -662,7 +668,6 @@
         };
     }
 
-    // --- KÉP FELTÖLTÉS ---
     async function handleImage(event) {
         const files = event.target.files;
         if (!files.length) return;
@@ -701,7 +706,6 @@
         showView('menu-view');
     }
 
-    // --- GALÉRIA LISTÁZÁS ---
     function openGallery() {
         showView('gallery-view');
         const container = document.getElementById('gallery-container');
@@ -786,6 +790,7 @@
         const delBtn = document.getElementById('delete-btn');
         const expBtn = document.getElementById('export-btn');
         const moveBtn = document.getElementById('move-btn');
+        const saveOrigBtn = document.getElementById('save-original-btn');
         const selectAllBtn = document.getElementById('select-all-btn');
         
         if (selected.length === allBoxes.length && allBoxes.length > 0) {
@@ -793,20 +798,23 @@
             selectAllBtn.innerText = "Kijelölés törlése";
         } else {
             isAllSelected = false;
-            selectAllBtn.innerText = "Összes kijelölése";
+            selectAllBtn.innerText = "Mindet kijelöl";
         }
         
         if (selected.length > 0) {
             delBtn.style.display = 'block';
             expBtn.style.display = 'block';
             moveBtn.style.display = 'block';
+            saveOrigBtn.style.display = 'block';
             delBtn.innerText = `Törlés (${selected.length})`;
             expBtn.innerText = `Küldés (${selected.length})`;
             moveBtn.innerText = `Mozgatás (${selected.length})`;
+            saveOrigBtn.innerText = `Kimentés (${selected.length})`;
         } else {
             delBtn.style.display = 'none';
             expBtn.style.display = 'none';
             moveBtn.style.display = 'none';
+            saveOrigBtn.style.display = 'none';
         }
     }
 
@@ -853,6 +861,104 @@
         
         showView('gallery-view');
         openGallery(); 
+    }
+
+    // --- EREDETI KÉPEK KIMENTÉSE (Save Originals) ---
+    let pendingOriginalFiles = [];
+
+    async function saveOriginals() {
+        const selected = document.querySelectorAll('#gallery-container input:checked');
+        if (selected.length === 0) return;
+
+        // VÉDELEM 1: Extra figyelmeztetés
+        if (!confirm("⚠️ FIGYELEM!\n\nEzzel a funkcióval a képeket NYÍLT, titkosítás nélküli formátumban mented ki a telefonodra!\n\nBiztosan folytatod?")) return;
+
+        // VÉDELEM 2: Mesterjelszó újbóli bekérése
+        const verifyPin = prompt("Biztosítékként kérlek, add meg újra a MESTERJELSZAVADAT:");
+        if (!verifyPin) return;
+
+        const tempMat = await getMasterKeyMaterial(verifyPin);
+        const savedToken = JSON.parse(localStorage.getItem('appSetup'));
+        const result = await decryptText(savedToken, tempMat);
+        
+        if (result !== "OK") {
+            alert("Hibás jelszó! A kimentés biztonsági okokból megszakadt.");
+            return;
+        }
+
+        const saveBtn = document.getElementById('save-original-btn');
+        saveBtn.innerText = "Dekódolás (0%)...";
+        saveBtn.disabled = true;
+        pendingOriginalFiles = [];
+
+        for (let i = 0; i < selected.length; i++) {
+            const id = Number(selected[i].value);
+            saveBtn.innerText = `Dekódolás (${Math.round(((i + 1) / selected.length) * 100)}%)...`;
+
+            const record = await new Promise((resolve) => {
+                const transaction = db.transaction(['images'], 'readonly');
+                const store = transaction.objectStore('images');
+                const request = store.get(id);
+                request.onsuccess = (e) => resolve(e.target.result);
+                request.onerror = () => resolve(null);
+            });
+
+            if (!record) continue;
+
+            let dataToDecryptFull = record.version === 2 ? record.full : record;
+            const decFullBuf = await decryptData(dataToDecryptFull, sessionKeyMaterial);
+
+            if (decFullBuf) {
+                const dec = new TextDecoder();
+                const base64Str = dec.decode(decFullBuf); // Visszakapjuk az eredeti base64 képet
+                
+                // Átalakítjuk osztható Fájllá
+                const file = dataURLtoFile(base64Str, `titkos_kimentett_${Date.now()}_${i}.jpg`);
+                pendingOriginalFiles.push(file);
+            }
+            await new Promise(res => setTimeout(res, 20)); 
+        }
+
+        // Kétlépcsős gomb a natív mentéshez
+        saveBtn.disabled = false;
+        saveBtn.innerText = "✅ Kattints a mentéshez!";
+        saveBtn.style.background = "var(--success)";
+        saveBtn.onclick = executeShareOriginals;
+    }
+
+    function executeShareOriginals() {
+        if (pendingOriginalFiles.length === 0) return;
+
+        if (navigator.canShare && navigator.canShare({ files: pendingOriginalFiles })) {
+            navigator.share({ files: pendingOriginalFiles })
+            .then(() => resetSaveOriginalsUI())
+            .catch(err => {
+                console.log('Kimentés megszakítva', err);
+                resetSaveOriginalsUI();
+            });
+        } else {
+            // Fallback böngészős letöltésre
+            pendingOriginalFiles.forEach(file => {
+                const url = URL.createObjectURL(file);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = file.name;
+                a.click();
+                URL.revokeObjectURL(url);
+            });
+            resetSaveOriginalsUI();
+        }
+    }
+
+    function resetSaveOriginalsUI() {
+        pendingOriginalFiles = [];
+        document.querySelectorAll('#gallery-container input:checked').forEach(cb => cb.checked = false);
+        
+        const saveBtn = document.getElementById('save-original-btn');
+        saveBtn.style.background = "var(--info)"; 
+        saveBtn.onclick = saveOriginals; 
+        
+        updateSelectionBtns();
     }
 
     let pendingExportFile = null;

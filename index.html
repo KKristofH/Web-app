@@ -15,12 +15,13 @@
         :root { --bg: #121212; --card: #1e1e1e; --text: #ffffff; --primary: #0a84ff; --danger: #ff453a; --success: #32d74b; --warning: #ff9f0a; }
         body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 20px; text-align: center; }
         
-        button, input, select { touch-action: manipulation; }
+        button, input, select, textarea { touch-action: manipulation; }
 
-        .view { display: none; max-width: 500px; margin: 0 auto; padding-top: 20px; }
+        .view { display: none; max-width: 500px; margin: 0 auto; padding-top: 20px; position: relative; }
         .active { display: block; }
         h1 { font-size: 24px; margin-bottom: 20px; }
-        input[type="password"] { width: 100%; padding: 15px; font-size: 20px; text-align: center; border-radius: 10px; border: none; box-sizing: border-box; margin-bottom: 15px; background: #333; color: white; }
+        input[type="text"], input[type="password"] { width: 100%; padding: 15px; font-size: 20px; text-align: center; border-radius: 10px; border: none; box-sizing: border-box; margin-bottom: 15px; background: #333; color: white; }
+        textarea { width: 100%; height: 250px; padding: 15px; font-size: 16px; border-radius: 10px; border: none; box-sizing: border-box; margin-bottom: 15px; background: #333; color: white; font-family: inherit; resize: vertical; }
         button { background: var(--primary); color: white; border: none; padding: 15px; border-radius: 10px; width: 100%; font-size: 16px; font-weight: bold; margin-bottom: 10px; cursor: pointer; -webkit-tap-highlight-color: transparent; }
         button:disabled { opacity: 0.5; cursor: not-allowed; }
         button.secondary { background: #333; }
@@ -52,6 +53,23 @@
         #status-msg { font-size: 14px; margin-top: 10px; min-height: 20px; }
         #lockout-msg { color: var(--danger); font-size: 16px; font-weight: bold; margin-bottom: 15px; display: none; }
 
+        /* A TITKOS PONT KINÉZETE */
+        #secret-dot {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 30px;
+            height: 30px;
+            background-color: red; /* Később ezt írjuk át 'transparent'-re */
+            border-radius: 50%;
+            z-index: 1000;
+        }
+
+        #notes-list { margin-bottom: 20px; }
+        .note-item { background: #222; padding: 15px; border-radius: 10px; margin-bottom: 10px; border: 1px solid #333; display: flex; justify-content: space-between; align-items: center; }
+        .note-item span { font-weight: bold; cursor: pointer; flex-grow: 1; text-align: left; }
+        .note-item button { width: auto; padding: 8px 12px; margin: 0; font-size: 12px; }
+
         #fullscreen-view { 
             position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
             background: #000000; z-index: 200; display: none; 
@@ -80,11 +98,27 @@
     </div>
 
     <div id="menu-view" class="view">
+        <div id="secret-dot" onclick="handleSecretTap()"></div>
+        
         <h1>Főmenü</h1>
         <button onclick="showView('upload-view')">📸 Új kép hozzáadása</button>
         <button onclick="showView('import-view')">📥 Mentés Importálása</button>
         <button onclick="openGallery()">🖼️ Képek megtekintése</button>
         <button class="danger" onclick="logout()">Kijelentkezés</button>
+    </div>
+
+    <div id="notes-view" class="view">
+        <h1>Titkos Jegyzetek</h1>
+        <button onclick="editNote(null)">+ Új Jegyzet írása</button>
+        <div id="notes-list"></div>
+        <button class="secondary" onclick="showView('menu-view')">Vissza a menübe</button>
+    </div>
+
+    <div id="note-editor-view" class="view">
+        <input type="text" id="note-title" placeholder="Jegyzet címe...">
+        <textarea id="note-content" placeholder="Ide írd a titkos szöveget..."></textarea>
+        <button onclick="saveNote()">Mentés</button>
+        <button class="secondary" onclick="openNotes()">Mégsem</button>
     </div>
 
     <div id="move-view" class="view">
@@ -171,11 +205,15 @@
     let albums = [];
     let lockoutInterval = null;
 
-    const request = indexedDB.open("SecureGalleryDB", 1);
+    // ADATBÁZIS VERZIÓ FRISSÍTÉSE (v2) - Hozzáadja a Jegyzetek táblát!
+    const request = indexedDB.open("SecureGalleryDB", 2);
     request.onupgradeneeded = (e) => {
         let db = e.target.result;
         if (!db.objectStoreNames.contains('images')) {
             db.createObjectStore('images', { autoIncrement: true });
+        }
+        if (!db.objectStoreNames.contains('notes')) {
+            db.createObjectStore('notes', { autoIncrement: true }); // Új tábla a jegyzeteknek
         }
     };
     request.onsuccess = (e) => { db = e.target.result; };
@@ -351,7 +389,6 @@
         }
         renderAlbumSelects();
 
-        // Mappamemória: Visszatöltjük a legutóbb használt mappát!
         const lastSel = localStorage.getItem('last_album') || 'ALL';
         if (lastSel === 'ALL' || albums.includes(lastSel)) {
             document.getElementById('album-select').value = lastSel;
@@ -359,7 +396,6 @@
             document.getElementById('album-select').value = 'ALL';
         }
         
-        // Gomb láthatóságának beállítása
         const currentSel = document.getElementById('album-select').value;
         document.getElementById('del-album-btn').style.display = (currentSel !== 'ALL') ? 'block' : 'none';
     }
@@ -375,7 +411,7 @@
         const moveSelect = document.getElementById('move-album-select');
         
         mainSelect.innerHTML = '<option value="ALL">Minden Kép</option>';
-        moveSelect.innerHTML = '<option value="ALL">Minden Kép (Kivétel a mappából)</option>'; // ÚJ FUNKCIÓ!
+        moveSelect.innerHTML = '<option value="ALL">Minden Kép (Kivétel a mappából)</option>';
         
         albums.forEach(a => {
             mainSelect.innerHTML += `<option value="${a}">${a}</option>`;
@@ -432,7 +468,7 @@
 
     function changeAlbum() {
         const sel = document.getElementById('album-select').value;
-        localStorage.setItem('last_album', sel); // Mappamemória mentése
+        localStorage.setItem('last_album', sel);
         document.getElementById('del-album-btn').style.display = (sel !== 'ALL') ? 'block' : 'none';
         openGallery(); 
     }
@@ -491,10 +527,142 @@
         sessionKeyMaterial = null; 
         albums = [];
         currentGalleryIds = [];
-        // Nem reseteljük az utolsó mappát, így legközelebb is onnan folytatod!
         showView('login-view');
     }
 
+    // --- TITKOS JEGYZETEK MOTORJA ---
+    
+    let tapCount = 0;
+    let tapTimer = null;
+
+    // A tripla kattintás logikája
+    function handleSecretTap() {
+        tapCount++;
+        if (tapCount === 3) {
+            tapCount = 0;
+            clearTimeout(tapTimer);
+            openNotes(); // Megnyitja a titkos menüt!
+        } else {
+            clearTimeout(tapTimer);
+            tapTimer = setTimeout(() => { tapCount = 0; }, 800); // 0.8 mp van a 3 kattintásra
+        }
+    }
+
+    let currentNoteId = null;
+
+    function openNotes() {
+        showView('notes-view');
+        loadNotes();
+    }
+
+    async function loadNotes() {
+        const list = document.getElementById('notes-list');
+        list.innerHTML = 'Jegyzetek betöltése...';
+        
+        const transaction = db.transaction(['notes'], 'readonly');
+        const store = transaction.objectStore('notes');
+        const request = store.getAllKeys();
+
+        request.onsuccess = async (e) => {
+            const keys = e.target.result;
+            list.innerHTML = '';
+            
+            if (!keys || keys.length === 0) {
+                list.innerHTML = '<p style="color:gray;">Még nincsenek titkos jegyzeteid.</p>';
+                return;
+            }
+            
+            for (let id of keys) {
+                await renderNoteItem(id, list);
+            }
+        };
+    }
+
+    function renderNoteItem(id, container) {
+        return new Promise((resolve) => {
+            const transaction = db.transaction(['notes'], 'readonly');
+            const store = transaction.objectStore('notes');
+            const req = store.get(id);
+            
+            req.onsuccess = async (e) => {
+                const record = e.target.result;
+                if (record) {
+                    // Cím dekódolása
+                    const plainTitle = await decryptText(record.title, sessionKeyMaterial) || "Névtelen jegyzet";
+                    
+                    const div = document.createElement('div');
+                    div.className = 'note-item';
+                    div.innerHTML = `
+                        <span onclick="editNote(${id})">${plainTitle}</span>
+                        <button class="danger" onclick="deleteNote(${id})">Törlés</button>
+                    `;
+                    container.appendChild(div);
+                }
+                resolve();
+            };
+        });
+    }
+
+    async function editNote(id) {
+        currentNoteId = id;
+        document.getElementById('note-title').value = '';
+        document.getElementById('note-content').value = '';
+        showView('note-editor-view');
+
+        // Ha meglévő jegyzetet nyitunk meg, visszatöltjük és dekódoljuk
+        if (id !== null) {
+            const transaction = db.transaction(['notes'], 'readonly');
+            const store = transaction.objectStore('notes');
+            const req = store.get(id);
+            
+            req.onsuccess = async (e) => {
+                const record = e.target.result;
+                if (record) {
+                    const plainTitle = await decryptText(record.title, sessionKeyMaterial);
+                    const plainContent = await decryptText(record.content, sessionKeyMaterial);
+                    
+                    document.getElementById('note-title').value = plainTitle || '';
+                    document.getElementById('note-content').value = plainContent || '';
+                }
+            };
+        }
+    }
+
+    async function saveNote() {
+        const title = document.getElementById('note-title').value || "Névtelen jegyzet";
+        const content = document.getElementById('note-content').value || "";
+
+        // Biztonságos titkosítás
+        const encTitle = await encryptText(title, sessionKeyMaterial);
+        const encContent = await encryptText(content, sessionKeyMaterial);
+
+        const payload = { title: encTitle, content: encContent, timestamp: Date.now() };
+
+        const transaction = db.transaction(['notes'], 'readwrite');
+        const store = transaction.objectStore('notes');
+
+        if (currentNoteId !== null) {
+            store.put(payload, currentNoteId); // Meglévő frissítése
+        } else {
+            store.add(payload); // Új létrehozása
+        }
+
+        transaction.oncomplete = () => {
+            openNotes(); // Vissza a listába
+        };
+    }
+
+    function deleteNote(id) {
+        if (!confirm("Biztosan véglegesen törlöd ezt a jegyzetet?")) return;
+        const transaction = db.transaction(['notes'], 'readwrite');
+        const store = transaction.objectStore('notes');
+        store.delete(id);
+        transaction.oncomplete = () => {
+            loadNotes();
+        };
+    }
+
+    // --- KÉP FELTÖLTÉS ---
     async function handleImage(event) {
         const files = event.target.files;
         if (!files.length) return;
@@ -533,6 +701,7 @@
         showView('menu-view');
     }
 
+    // --- GALÉRIA LISTÁZÁS ---
     function openGallery() {
         showView('gallery-view');
         const container = document.getElementById('gallery-container');
@@ -642,17 +811,14 @@
     }
 
     function showMoveModal() {
-        // Most már mindig nyitható, ha kivesszük a mappából!
         renderAlbumSelects();
         showView('move-view');
     }
 
-    // A JAVÍTOTT ÁTHELYEZŐ MOTOR
     async function executeMove() {
         const targetAlbum = document.getElementById('move-album-select').value;
         const selectedElements = document.querySelectorAll('#gallery-container input:checked');
         
-        // Először megcsináljuk az async titkosítást (Kivárjuk, mielőtt ajtót nyitunk az adatbázisnak!)
         let encAlbumData = null;
         if (targetAlbum !== 'ALL') {
             encAlbumData = await encryptText(targetAlbum, sessionKeyMaterial);
@@ -660,7 +826,6 @@
         
         let movedCount = 0;
         
-        // Majd utána nyitjuk az adatbázist, minden képnél egyesével, tisztán.
         for (let cb of selectedElements) {
             const id = Number(cb.value);
             
@@ -672,7 +837,7 @@
                 req.onsuccess = e => {
                     const rec = e.target.result;
                     if(rec) {
-                        rec.album = encAlbumData; // Itt adjuk át az új (titkosított vagy üres) mappa nevet
+                        rec.album = encAlbumData; 
                         store.put(rec, id).onsuccess = resolve;
                     } else { 
                         resolve(); 
@@ -761,7 +926,7 @@
         blobParts.push("]");
         
         const blob = new Blob(blobParts, { type: 'application/json' });
-        pendingExportFile = new File([blob], 'ssssh.json', { type: 'application/json' });
+        pendingExportFile = new File([blob], 'titkositott_kepek.json', { type: 'application/json' });
 
         exportBtn.disabled = false;
         exportBtn.innerText = "📦 Kész! Kattints a megosztáshoz";
@@ -783,7 +948,7 @@
             const url = URL.createObjectURL(pendingExportFile);
             const a = document.createElement('a');
             a.href = url;
-            a.download = 'ssssh.json';
+            a.download = 'titkositott_kepek.json';
             a.click();
             URL.revokeObjectURL(url);
             resetExportUI();

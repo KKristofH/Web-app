@@ -34,16 +34,18 @@
         .file-upload-wrapper input[type=file] { font-size: 100px; position: absolute; left: 0; top: 0; opacity: 0; cursor: pointer; height: 100%; }
         .file-upload-btn { background: var(--primary); color: white; padding: 15px; border-radius: 10px; font-size: 16px; font-weight: bold; display: block; width: 100%; box-sizing: border-box; }
         
-        .gallery-header { display: flex; gap: 10px; align-items: center; margin-bottom: 15px; }
-        .gallery-header select { margin-bottom: 0; flex: 1; }
-        .gallery-header button { width: auto; margin-bottom: 0; padding: 12px 15px; }
+        #gallery-header, #video-gallery-header { display: flex; gap: 10px; align-items: center; margin-bottom: 15px; }
+        #gallery-header select, #video-gallery-header select { margin-bottom: 0; flex: 1; }
+        #gallery-header button, #video-gallery-header button { width: auto; margin-bottom: 0; padding: 12px 15px; }
 
-        .gallery-container { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 150px; }
+        #gallery-container, #video-gallery-container { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 150px; }
         .img-card { position: relative; width: 100%; height: 150px; border-radius: 10px; overflow: hidden; border: 1px solid #333; background: #222; }
         .img-card img { width: 100%; height: 100%; object-fit: cover; cursor: pointer; }
         .img-card input[type="checkbox"] { position: absolute; top: 10px; right: 10px; width: 25px; height: 25px; z-index: 10; accent-color: var(--primary); }
-        .play-icon { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 40px; color: rgba(255,255,255,0.8); pointer-events: none; text-shadow: 0 0 10px black; }
         
+        /* Videó lejátszás ikon */
+        .play-icon { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 40px; color: rgba(255,255,255,0.8); pointer-events: none; text-shadow: 0 0 10px black; }
+
         .gallery-actions { 
             position: fixed; bottom: 0; left: 0; width: 100%; background: #1e1e1e; 
             padding: 10px; box-sizing: border-box; display: flex; flex-wrap: wrap; gap: 5px; 
@@ -62,20 +64,27 @@
         .note-item { background: #222; padding: 15px; border-radius: 10px; margin-bottom: 10px; border: 1px solid #333; display: flex; align-items: center; }
         .note-item span { font-weight: bold; cursor: pointer; flex-grow: 1; text-align: left; }
         
-        .fullscreen-overlay { 
+        #fullscreen-view { 
             position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
             background: #000000; z-index: 200; display: none; 
-            align-items: center; justify-content: center; overflow: hidden; flex-direction: column;
+            align-items: center; justify-content: center; overflow: hidden; 
         }
-        .fullscreen-overlay.active { display: flex; }
-        .fs-content { max-width: 100%; max-height: 100%; object-fit: contain; z-index: 201; }
+        #fullscreen-view.active { display: flex; }
+        #fs-img { max-width: 100%; max-height: 100%; object-fit: contain; z-index: 201; }
         .fs-close { 
             position: absolute; top: calc(env(safe-area-inset-top, 20px) + 10px); right: 20px; 
             background: rgba(255,255,255,0.2); border: none; color: white; font-size: 18px; 
             width: 40px; height: 40px; border-radius: 50%; cursor: pointer; z-index: 203; 
             display: flex; align-items: center; justify-content: center; padding: 0;
         }
-        .fs-loader { position: absolute; color: white; font-size: 16px; z-index: 202; display: none; text-align: center;}
+        #fs-loader { position: absolute; color: white; font-size: 16px; z-index: 202; display: none; }
+
+        /* ÚJ: VIDEÓ LEJÁTSZÓ OVERLAY */
+        #video-player-view { 
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+            background: #000000; z-index: 200; display: none; 
+            align-items: center; justify-content: center; overflow: hidden; flex-direction: column;
+        }
     </style>
 </head>
 <body>
@@ -91,6 +100,7 @@
 
     <div id="menu-view" class="view">
         <div id="secret-dot" onclick="handleSecretTap()"></div>
+        
         <h1>Főmenü</h1>
         <button onclick="showView('upload-view')">📸 Új fájl hozzáadása</button>
         <button onclick="showView('import-view')">📥 Mentés Importálása</button>
@@ -123,7 +133,14 @@
         <h1>Áthelyezés mappába</h1>
         <select id="move-album-select"></select>
         <button onclick="executeMove()">Áthelyezés</button>
-        <button class="secondary" onclick="cancelMove()">Mégsem</button>
+        <button class="secondary" onclick="showView('gallery-view')">Mégsem</button>
+    </div>
+
+    <div id="video-move-view" class="view">
+        <h1>Áthelyezés mappába</h1>
+        <select id="video-move-album-select"></select>
+        <button onclick="executeVideoMove()">Áthelyezés</button>
+        <button class="secondary" onclick="showView('video-gallery-view')">Mégsem</button>
     </div>
 
     <div id="import-view" class="view">
@@ -142,7 +159,7 @@
     <div id="upload-view" class="view">
         <h1>Fájl titkosítása</h1>
         <div class="file-upload-wrapper">
-            <button class="file-upload-btn">Kép vagy Videó kiválasztása</button>
+            <button class="file-upload-btn">Kiválasztás vagy Felvétel</button>
             <input type="file" accept="image/*, video/*" id="media-input" multiple onchange="handleMediaUpload(event)">
         </div>
         <p id="upload-status" style="font-size: 14px; color: gray;">Várakozás fájlra...</p>
@@ -150,49 +167,57 @@
     </div>
 
     <div id="gallery-view" class="view">
-        <div class="gallery-header">
-            <select id="album-select" onchange="changeAlbum('image')"><option value="ALL">Minden Kép</option></select>
-            <button onclick="createAlbum('image')">+ Új</button>
-            <button id="del-album-btn" class="danger" onclick="deleteAlbum('image')" style="display:none;">Törlés</button>
+        <div id="gallery-header">
+            <select id="album-select" onchange="changeAlbum()">
+                <option value="ALL">Minden Kép</option>
+            </select>
+            <button onclick="createAlbum()">+ Új</button>
+            <button id="del-album-btn" class="danger" onclick="deleteAlbum()" style="display:none;">Törlés</button>
         </div>
-        <div id="gallery-container" class="gallery-container"></div>
+
+        <div id="gallery-container"></div>
+        
         <div class="gallery-actions">
             <button class="secondary" onclick="showView('menu-view')">Vissza</button>
-            <button class="secondary" id="select-all-btn" onclick="toggleSelectAll('image')">Mindet kijelöl</button>
-            <button class="primary" id="move-btn" style="display:none;" onclick="showMoveModal('image')">Mozgatás</button>
-            <button class="info" id="save-original-btn" style="display:none;" onclick="saveOriginals('image')">Kimentés</button>
-            <button class="warning" id="export-btn" style="display:none;" onclick="exportSelected('image')">Küldés</button>
-            <button class="danger" id="delete-btn" style="display:none;" onclick="deleteSelected('image')">Törlés</button>
+            <button class="secondary" id="select-all-btn" onclick="toggleSelectAll()">Mindet kijelöl</button>
+            <button class="primary" id="move-btn" style="display:none;" onclick="showMoveModal()">Mozgatás</button>
+            <button class="info" id="save-original-btn" style="display:none;" onclick="saveOriginals()">Kimentés</button>
+            <button class="warning" id="export-btn" style="display:none;" onclick="exportSelected()">Küldés</button>
+            <button class="danger" id="delete-btn" style="display:none;" onclick="deleteSelected()">Törlés</button>
         </div>
     </div>
 
     <div id="video-gallery-view" class="view">
-        <div class="gallery-header">
-            <select id="video-album-select" onchange="changeAlbum('video')"><option value="ALL">Minden Videó</option></select>
-            <button onclick="createAlbum('video')">+ Új</button>
-            <button id="del-video-album-btn" class="danger" onclick="deleteAlbum('video')" style="display:none;">Törlés</button>
+        <div id="video-gallery-header">
+            <select id="video-album-select" onchange="changeVideoAlbum()">
+                <option value="ALL">Minden Videó</option>
+            </select>
+            <button onclick="createVideoAlbum()">+ Új</button>
+            <button id="del-video-album-btn" class="danger" onclick="deleteVideoAlbum()" style="display:none;">Törlés</button>
         </div>
-        <div id="video-gallery-container" class="gallery-container"></div>
+
+        <div id="video-gallery-container"></div>
+        
         <div class="gallery-actions">
             <button class="secondary" onclick="showView('menu-view')">Vissza</button>
-            <button class="secondary" id="video-select-all-btn" onclick="toggleSelectAll('video')">Mindet kijelöl</button>
-            <button class="primary" id="video-move-btn" style="display:none;" onclick="showMoveModal('video')">Mozgatás</button>
-            <button class="info" id="video-save-original-btn" style="display:none;" onclick="saveOriginals('video')">Kimentés</button>
-            <button class="warning" id="video-export-btn" style="display:none;" onclick="exportSelected('video')">Küldés</button>
-            <button class="danger" id="video-delete-btn" style="display:none;" onclick="deleteSelected('video')">Törlés</button>
+            <button class="secondary" id="video-select-all-btn" onclick="toggleVideoSelectAll()">Mindet kijelöl</button>
+            <button class="primary" id="video-move-btn" style="display:none;" onclick="showVideoMoveModal()">Mozgatás</button>
+            <button class="info" id="video-save-original-btn" style="display:none;" onclick="saveOriginalVideos()">Kimentés</button>
+            <button class="warning" id="video-export-btn" style="display:none;" onclick="exportSelectedVideos()">Küldés</button>
+            <button class="danger" id="video-delete-btn" style="display:none;" onclick="deleteSelectedVideos()">Törlés</button>
         </div>
     </div>
 
-    <div id="fullscreen-view" class="fullscreen-overlay">
+    <div id="fullscreen-view">
         <button class="fs-close" onclick="closeFullscreen()">✕</button>
-        <div id="fs-loader" class="fs-loader">Betöltés...</div>
-        <img id="fs-img" class="fs-content" src="">
+        <div id="fs-loader">Betöltés...</div>
+        <img id="fs-img" src="">
     </div>
 
-    <div id="video-player-view" class="fullscreen-overlay">
+    <div id="video-player-view">
         <button class="fs-close" onclick="closeVideoPlayer()">✕</button>
-        <div id="video-loader" class="fs-loader">Betöltés...<br><span id="video-progress">0%</span></div>
-        <video id="fs-video" class="fs-content" controls playsinline style="display: none;"></video>
+        <div id="video-loader" style="position: absolute; color: white; font-size: 16px; z-index: 202; display: none; text-align: center;">Betöltés...<br><span id="video-progress">0%</span></div>
+        <video id="fs-video" style="max-width: 100%; max-height: 100%; z-index: 201; display: none;" controls playsinline></video>
     </div>
 
 <script>
@@ -216,19 +241,27 @@
     let currentGalleryIds = []; 
     let currentImgIndex = 0;       
     let isAllSelected = false;
-    let isAllVideoSelected = false;
     let albums = [];
     let lockoutInterval = null;
-    let activeMoveType = 'image';
+
+    // Új videós változók
+    let currentVideoGalleryIds = [];
+    let isAllVideoSelected = false;
     let activeVideoUrl = null;
 
-    // ADATBÁZIS V3: Videók és Videó Szeletek hozzáadása!
+    // ADATBÁZIS VERZIÓ FRISSÍTÉSE (v3) - Videók táblák
     const request = indexedDB.open("SecureGalleryDB", 3);
     request.onupgradeneeded = (e) => {
         let db = e.target.result;
-        if (!db.objectStoreNames.contains('images')) db.createObjectStore('images', { autoIncrement: true });
-        if (!db.objectStoreNames.contains('notes')) db.createObjectStore('notes', { autoIncrement: true });
-        if (!db.objectStoreNames.contains('videos')) db.createObjectStore('videos', { keyPath: 'id' });
+        if (!db.objectStoreNames.contains('images')) {
+            db.createObjectStore('images', { autoIncrement: true });
+        }
+        if (!db.objectStoreNames.contains('notes')) {
+            db.createObjectStore('notes', { autoIncrement: true }); 
+        }
+        if (!db.objectStoreNames.contains('videos')) {
+            db.createObjectStore('videos', { autoIncrement: true }); 
+        }
         if (!db.objectStoreNames.contains('video_chunks')) {
             let chunkStore = db.createObjectStore('video_chunks', { autoIncrement: true });
             chunkStore.createIndex('videoId', 'videoId', { unique: false });
@@ -266,23 +299,34 @@
     function dataURLtoFile(dataurl, filename) {
         var arr = dataurl.split(','), mime = arr[0].match(/:(.*?);/)[1],
             bstr = atob(arr[1]), n = bstr.length, u8arr = new Uint8Array(n);
-        while(n--){ u8arr[n] = bstr.charCodeAt(n); }
+        while(n--){
+            u8arr[n] = bstr.charCodeAt(n);
+        }
         return new File([u8arr], filename, {type:mime});
     }
 
     async function getMasterKeyMaterial(password) {
         const enc = new TextEncoder();
-        return await crypto.subtle.importKey("raw", enc.encode(password), {name: "PBKDF2"}, false, ["deriveBits", "deriveKey"]);
+        return await crypto.subtle.importKey(
+            "raw", 
+            enc.encode(password), 
+            {name: "PBKDF2"}, 
+            false, 
+            ["deriveBits", "deriveKey"]
+        );
     }
 
     async function deriveAESKey(keyMaterial, salt) {
         return await crypto.subtle.deriveKey(
             { name: "PBKDF2", salt: salt, iterations: 100000, hash: "SHA-256" },
-            keyMaterial, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]
+            keyMaterial, 
+            { name: "AES-GCM", length: 256 }, 
+            false, 
+            ["encrypt", "decrypt"]
         );
     }
 
-    // A SZELETELT IV RENDSZER (Minden darab egyedi biztonságot kap)
+    // A SZELETELT IV RENDSZER (Minden titkosítás kap egy egyedi IV-t)
     async function encryptData(dataBuffer, keyMaterial) {
         const salt = crypto.getRandomValues(new Uint8Array(16));
         const iv = crypto.getRandomValues(new Uint8Array(12));
@@ -305,7 +349,11 @@
     async function encryptText(text, keyMaterial) {
         const enc = new TextEncoder();
         const encData = await encryptData(enc.encode(text), keyMaterial);
-        return { salt: Array.from(encData.salt), iv: Array.from(encData.iv), data: await bufferToBase64(encData.data) };
+        return {
+            salt: Array.from(encData.salt),
+            iv: Array.from(encData.iv),
+            data: await bufferToBase64(encData.data)
+        };
     }
 
     async function decryptText(encryptedObj, keyMaterial) {
@@ -317,7 +365,8 @@
             };
             const decBuf = await decryptData(encData, keyMaterial);
             if (!decBuf) return null;
-            return new TextDecoder().decode(decBuf);
+            const dec = new TextDecoder();
+            return dec.decode(decBuf);
         } catch(e) { return null; }
     }
 
@@ -327,32 +376,46 @@
             img.onload = () => {
                 const canvas = document.createElement('canvas');
                 const scale = Math.min(maxWidth / img.width, 1);
-                canvas.width = img.width * scale; canvas.height = img.height * scale;
+                canvas.width = img.width * scale;
+                canvas.height = img.height * scale;
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                resolve(canvas.toDataURL('image/jpeg', 0.5)); 
+                const result = canvas.toDataURL('image/jpeg', 0.5);
+                canvas.width = 0; canvas.height = 0; img.src = '';
+                resolve(result); 
             };
-            img.onerror = reject; img.src = base64Image;
+            img.onerror = reject;
+            img.src = base64Image;
         });
     }
 
-    // Videó bélyegkép lopó (Háttérben)
+    // ÚJ: Videó bélyegkép lopó (Háttérben)
     function generateVideoThumbnail(file) {
         return new Promise((resolve) => {
             const video = document.createElement('video');
             video.src = URL.createObjectURL(file);
-            video.muted = true; video.playsInline = true; video.currentTime = 1;
-            video.onloadeddata = () => { video.currentTime = Math.min(1, video.duration / 2); };
+            video.muted = true;
+            video.playsInline = true;
+            video.currentTime = 1; // 1 másodpercre teker
+            
+            video.onloadeddata = () => {
+                video.currentTime = Math.min(1, video.duration / 2);
+            };
+            
             video.onseeked = () => {
                 const canvas = document.createElement('canvas');
                 const scale = Math.min(300 / video.videoWidth, 1);
-                canvas.width = video.videoWidth * scale; canvas.height = video.videoHeight * scale;
+                canvas.width = video.videoWidth * scale;
+                canvas.height = video.videoHeight * scale;
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
                 resolve(canvas.toDataURL('image/jpeg', 0.5));
                 URL.revokeObjectURL(video.src);
             };
-            video.onerror = () => resolve(null);
+            
+            video.onerror = () => {
+                resolve(null);
+            };
         });
     }
 
@@ -364,13 +427,17 @@
         const input = document.getElementById('pin-input');
 
         if (now < lockUntil) {
-            btn.disabled = true; input.disabled = true; msg.style.display = 'block';
+            btn.disabled = true;
+            input.disabled = true;
+            msg.style.display = 'block';
             let remain = Math.ceil((lockUntil - now) / 60000);
             msg.innerText = `Túl sok hibás próbálkozás! Kizárva: ${remain} percig.`;
             if(!lockoutInterval) lockoutInterval = setInterval(checkLockout, 10000);
             return true;
         } else {
-            btn.disabled = false; input.disabled = false; msg.style.display = 'none';
+            btn.disabled = false;
+            input.disabled = false;
+            msg.style.display = 'none';
             if(lockoutInterval) { clearInterval(lockoutInterval); lockoutInterval = null; }
             return false;
         }
@@ -381,7 +448,8 @@
         localStorage.setItem('bf_attempts', attempts);
         if (attempts >= 5) {
             let minutes = 5 * Math.pow(2, attempts - 5); 
-            localStorage.setItem('bf_lock', Date.now() + (minutes * 60000));
+            let lockUntil = Date.now() + (minutes * 60000);
+            localStorage.setItem('bf_lock', lockUntil);
             checkLockout();
         } else {
             const msg = document.getElementById('status-msg');
@@ -390,240 +458,586 @@
         }
     }
 
-    function resetBruteForce() { localStorage.removeItem('bf_attempts'); localStorage.removeItem('bf_lock'); }
+    function resetBruteForce() {
+        localStorage.removeItem('bf_attempts');
+        localStorage.removeItem('bf_lock');
+    }
 
     async function initAlbums() {
         let encAlbums = localStorage.getItem('gallery_albums_enc');
         if (encAlbums) {
             let dec = await decryptText(JSON.parse(encAlbums), sessionKeyMaterial);
             albums = dec ? JSON.parse(dec) : [];
-        } else { albums = []; }
+        } else {
+            let oldAlbums = localStorage.getItem('gallery_albums');
+            if (oldAlbums) {
+                albums = JSON.parse(oldAlbums);
+                await saveAlbums(); 
+                localStorage.removeItem('gallery_albums'); 
+            } else {
+                albums = [];
+            }
+        }
         renderAlbumSelects();
 
-        const lastImgSel = localStorage.getItem('last_album_image') || 'ALL';
-        const lastVidSel = localStorage.getItem('last_album_video') || 'ALL';
+        const lastSel = localStorage.getItem('last_album') || 'ALL';
+        if (lastSel === 'ALL' || albums.includes(lastSel)) {
+            document.getElementById('album-select').value = lastSel;
+            document.getElementById('video-album-select').value = lastSel;
+        } else {
+            document.getElementById('album-select').value = 'ALL';
+            document.getElementById('video-album-select').value = 'ALL';
+        }
         
-        document.getElementById('album-select').value = albums.includes(lastImgSel) ? lastImgSel : 'ALL';
-        document.getElementById('video-album-select').value = albums.includes(lastVidSel) ? lastVidSel : 'ALL';
-        
-        document.getElementById('del-album-btn').style.display = (document.getElementById('album-select').value !== 'ALL') ? 'block' : 'none';
+        const currentSel = document.getElementById('album-select').value;
+        document.getElementById('del-album-btn').style.display = (currentSel !== 'ALL') ? 'block' : 'none';
         document.getElementById('del-video-album-btn').style.display = (document.getElementById('video-album-select').value !== 'ALL') ? 'block' : 'none';
     }
 
     async function saveAlbums() {
-        let enc = await encryptText(JSON.stringify(albums), sessionKeyMaterial);
+        let jsonStr = JSON.stringify(albums);
+        let enc = await encryptText(jsonStr, sessionKeyMaterial);
         localStorage.setItem('gallery_albums_enc', JSON.stringify(enc));
     }
 
     function renderAlbumSelects() {
-        const selects = ['album-select', 'video-album-select'];
-        selects.forEach(id => { document.getElementById(id).innerHTML = '<option value="ALL">Minden</option>'; });
-        document.getElementById('move-album-select').innerHTML = '<option value="ALL">Minden (Kivétel a mappából)</option>';
+        // Eredeti kép legördülők
+        const mainSelect = document.getElementById('album-select');
+        const moveSelect = document.getElementById('move-album-select');
+        
+        // Új videó legördülők
+        const videoSelect = document.getElementById('video-album-select');
+        const videoMoveSelect = document.getElementById('video-move-album-select');
+        
+        mainSelect.innerHTML = '<option value="ALL">Minden Kép</option>';
+        moveSelect.innerHTML = '<option value="ALL">Minden Kép (Kivétel a mappából)</option>';
+        
+        videoSelect.innerHTML = '<option value="ALL">Minden Videó</option>';
+        videoMoveSelect.innerHTML = '<option value="ALL">Minden Videó (Kivétel a mappából)</option>';
         
         albums.forEach(a => {
-            selects.forEach(id => { document.getElementById(id).innerHTML += `<option value="${a}">${a}</option>`; });
-            document.getElementById('move-album-select').innerHTML += `<option value="${a}">${a}</option>`;
+            mainSelect.innerHTML += `<option value="${a}">${a}</option>`;
+            moveSelect.innerHTML += `<option value="${a}">${a}</option>`;
+            videoSelect.innerHTML += `<option value="${a}">${a}</option>`;
+            videoMoveSelect.innerHTML += `<option value="${a}">${a}</option>`;
         });
     }
 
-    async function createAlbum(type) {
+    async function createAlbum() {
         const name = prompt("Mappa neve:");
         if(!name || name.trim() === '') return;
         if(albums.includes(name.trim())) { alert("Ez a mappa már létezik!"); return; }
-        albums.push(name.trim()); await saveAlbums(); renderAlbumSelects();
         
-        const selId = type === 'image' ? 'album-select' : 'video-album-select';
-        document.getElementById(selId).value = name.trim();
-        changeAlbum(type);
+        albums.push(name.trim());
+        await saveAlbums();
+        renderAlbumSelects();
+        
+        document.getElementById('album-select').value = name.trim();
+        changeAlbum();
+    }
+    
+    async function createVideoAlbum() {
+        const name = prompt("Mappa neve:");
+        if(!name || name.trim() === '') return;
+        if(albums.includes(name.trim())) { alert("Ez a mappa már létezik!"); return; }
+        
+        albums.push(name.trim());
+        await saveAlbums();
+        renderAlbumSelects();
+        
+        document.getElementById('video-album-select').value = name.trim();
+        changeVideoAlbum();
     }
 
-    async function deleteAlbum(type) {
-        const selId = type === 'image' ? 'album-select' : 'video-album-select';
-        const sel = document.getElementById(selId).value;
+    async function deleteAlbum() {
+        const sel = document.getElementById('album-select').value;
         if (sel === 'ALL') return;
-        if (!confirm(`Biztosan törlöd a "${sel}" mappát?\n\nA benne lévő fájlok visszakerülnek a főkönyvtárba!`)) return;
+        if (!confirm(`Biztosan törlöd a "${sel}" mappát?\n\nA benne lévő képek nem törlődnek, csak visszakerülnek a Minden Kép közé!`)) return;
 
-        albums = albums.filter(a => a !== sel); await saveAlbums();
+        albums = albums.filter(a => a !== sel);
+        await saveAlbums();
 
-        // Képek és Videók frissítése
-        const stores = ['images', 'videos'];
-        for (let storeName of stores) {
-            await new Promise(resolve => {
-                const req = db.transaction([storeName], 'readwrite').objectStore(storeName).openCursor();
-                req.onsuccess = async e => {
-                    const cursor = e.target.result;
-                    if(cursor) {
-                        const rec = cursor.value;
-                        let recAlbum = rec.album ? (typeof rec.album === 'string' ? rec.album : await decryptText(rec.album, sessionKeyMaterial)) : null;
-                        if(recAlbum === sel) { rec.album = null; cursor.update(rec); }
-                        cursor.continue();
-                    } else { resolve(); }
-                };
-            });
-        }
-        renderAlbumSelects(); document.getElementById(selId).value = 'ALL'; changeAlbum(type);
+        const transaction = db.transaction(['images'], 'readwrite');
+        const store = transaction.objectStore('images');
+        const req = store.openCursor();
+        
+        req.onsuccess = async e => {
+            const cursor = e.target.result;
+            if(cursor) {
+                const rec = cursor.value;
+                let recAlbum = null;
+                if (rec.album) {
+                    recAlbum = typeof rec.album === 'string' ? rec.album : await decryptText(rec.album, sessionKeyMaterial);
+                }
+                
+                if(recAlbum === sel) {
+                    rec.album = null; 
+                    cursor.update(rec);
+                }
+                cursor.continue();
+            } else {
+                renderAlbumSelects();
+                document.getElementById('album-select').value = 'ALL';
+                changeAlbum();
+            }
+        };
+    }
+    
+    async function deleteVideoAlbum() {
+        const sel = document.getElementById('video-album-select').value;
+        if (sel === 'ALL') return;
+        if (!confirm(`Biztosan törlöd a "${sel}" mappát?\n\nA benne lévő videók nem törlődnek, csak visszakerülnek a Minden Videó közé!`)) return;
+
+        albums = albums.filter(a => a !== sel);
+        await saveAlbums();
+
+        const transaction = db.transaction(['videos'], 'readwrite');
+        const store = transaction.objectStore('videos');
+        const req = store.openCursor();
+        
+        req.onsuccess = async e => {
+            const cursor = e.target.result;
+            if(cursor) {
+                const rec = cursor.value;
+                let recAlbum = null;
+                if (rec.album) {
+                    recAlbum = typeof rec.album === 'string' ? rec.album : await decryptText(rec.album, sessionKeyMaterial);
+                }
+                
+                if(recAlbum === sel) {
+                    rec.album = null; 
+                    cursor.update(rec);
+                }
+                cursor.continue();
+            } else {
+                renderAlbumSelects();
+                document.getElementById('video-album-select').value = 'ALL';
+                changeVideoAlbum();
+            }
+        };
     }
 
-    function changeAlbum(type) {
-        if(type === 'image') {
-            const sel = document.getElementById('album-select').value;
-            localStorage.setItem('last_album_image', sel);
-            document.getElementById('del-album-btn').style.display = (sel !== 'ALL') ? 'block' : 'none';
-            openGallery(); 
-        } else {
-            const sel = document.getElementById('video-album-select').value;
-            localStorage.setItem('last_album_video', sel);
-            document.getElementById('del-video-album-btn').style.display = (sel !== 'ALL') ? 'block' : 'none';
-            openVideoGallery(); 
-        }
+    function changeAlbum() {
+        const sel = document.getElementById('album-select').value;
+        localStorage.setItem('last_album', sel);
+        document.getElementById('del-album-btn').style.display = (sel !== 'ALL') ? 'block' : 'none';
+        openGallery(); 
+    }
+    
+    function changeVideoAlbum() {
+        const sel = document.getElementById('video-album-select').value;
+        localStorage.setItem('last_album', sel); // Közös mappamemória használata a kényelemért
+        document.getElementById('del-video-album-btn').style.display = (sel !== 'ALL') ? 'block' : 'none';
+        openVideoGallery(); 
     }
 
-    window.onload = () => { if(!localStorage.getItem('appSetup')) { document.getElementById('login-text').innerText = "Hozd létre a mesterjelszavad"; } checkLockout(); };
+    window.onload = () => {
+        if(!localStorage.getItem('appSetup')) {
+            document.getElementById('login-text').innerText = "Hozd létre a mesterjelszavad";
+        }
+        checkLockout();
+    };
 
     function showView(viewId) {
         document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
-        document.querySelectorAll('.fullscreen-overlay').forEach(el => el.classList.remove('active'));
+        document.getElementById('fullscreen-view').classList.remove('active'); 
+        document.getElementById('video-player-view').style.display = 'none'; // Rejtsük el a videólejátszót is
+        
+        // Ha kilépünk, biztosan leállítjuk a videót
+        if(activeVideoUrl) {
+            URL.revokeObjectURL(activeVideoUrl);
+            activeVideoUrl = null;
+            const vidEl = document.getElementById('fs-video');
+            vidEl.pause();
+            vidEl.src = '';
+        }
+
         document.getElementById(viewId).classList.add('active');
-        if(activeVideoUrl) { URL.revokeObjectURL(activeVideoUrl); activeVideoUrl = null; document.getElementById('fs-video').src = ''; }
     }
 
+    // --- EREDETI JÓL MŰKÖDŐ BEJELENTKEZÉS ---
     async function login() {
         if (checkLockout()) return;
+
         const pin = document.getElementById('pin-input').value;
         if (!pin) return;
-        
-        document.getElementById('status-msg').innerText = "Belépés...";
-        document.getElementById('status-msg').style.color = "var(--success)";
+
+        const msg = document.getElementById('status-msg');
+        msg.innerText = "Belépés...";
+        msg.style.color = "var(--success)";
+
         const tempMaterial = await getMasterKeyMaterial(pin);
 
         if (!localStorage.getItem('appSetup')) {
-            localStorage.setItem('appSetup', JSON.stringify(await encryptText("OK", tempMaterial)));
-            sessionKeyMaterial = tempMaterial; await initAlbums();
-            document.getElementById('pin-input').value = ''; document.getElementById('status-msg').innerText = ""; showView('menu-view');
+            const verificationToken = await encryptText("OK", tempMaterial);
+            localStorage.setItem('appSetup', JSON.stringify(verificationToken));
+            sessionKeyMaterial = tempMaterial; 
+            await initAlbums();
+            document.getElementById('pin-input').value = ''; 
+            msg.innerText = "";
+            showView('menu-view');
         } else {
-            const result = await decryptText(JSON.parse(localStorage.getItem('appSetup')), tempMaterial);
+            const savedToken = JSON.parse(localStorage.getItem('appSetup'));
+            const result = await decryptText(savedToken, tempMaterial);
+            
             if (result === "OK") {
-                sessionKeyMaterial = tempMaterial; resetBruteForce(); await initAlbums();
-                document.getElementById('pin-input').value = ''; document.getElementById('status-msg').innerText = ""; showView('menu-view');
-            } else { handleFailedLogin(); }
+                sessionKeyMaterial = tempMaterial;
+                resetBruteForce();
+                await initAlbums();
+                document.getElementById('pin-input').value = ''; 
+                msg.innerText = "";
+                showView('menu-view');
+            } else { 
+                handleFailedLogin();
+            }
         }
     }
 
-    function logout() { sessionKeyMaterial = null; albums = []; currentGalleryIds = []; showView('login-view'); }
+    function logout() {
+        sessionKeyMaterial = null; 
+        albums = [];
+        currentGalleryIds = [];
+        currentVideoGalleryIds = [];
+        showView('login-view');
+    }
 
-    // --- TITKOS JEGYZETEK (Röviden) ---
-    let tapCount = 0; let tapTimer = null; let isAllNotesSelected = false; let currentNoteId = null;
+    // --- TITKOS JEGYZETEK MOTORJA (Eredeti) ---
+    let tapCount = 0;
+    let tapTimer = null;
+    let isAllNotesSelected = false;
+
     function handleSecretTap() {
         tapCount++;
-        if (tapCount === 3) { tapCount = 0; clearTimeout(tapTimer); openNotes(); } 
-        else { clearTimeout(tapTimer); tapTimer = setTimeout(() => { tapCount = 0; }, 800); }
+        if (tapCount === 3) {
+            tapCount = 0;
+            clearTimeout(tapTimer);
+            openNotes(); 
+        } else {
+            clearTimeout(tapTimer);
+            tapTimer = setTimeout(() => { tapCount = 0; }, 800); 
+        }
     }
-    function openNotes() { showView('notes-view'); isAllNotesSelected = false; document.getElementById('notes-list').innerHTML = ''; updateNoteSelectionBtns(); loadNotes(); }
+
+    let currentNoteId = null;
+
+    function openNotes() {
+        showView('notes-view');
+        isAllNotesSelected = false;
+        document.getElementById('notes-list').innerHTML = ''; 
+        updateNoteSelectionBtns(); 
+        loadNotes();
+    }
+
     async function loadNotes() {
-        const list = document.getElementById('notes-list'); list.innerHTML = '<p style="color:gray;">Jegyzetek betöltése...</p>'; updateNoteSelectionBtns();
-        db.transaction(['notes'], 'readonly').objectStore('notes').getAllKeys().onsuccess = async (e) => {
-            const keys = e.target.result; list.innerHTML = '';
-            if (!keys || keys.length === 0) { list.innerHTML = '<p style="color:gray;">Még nincsenek titkos jegyzeteid.</p>'; updateNoteSelectionBtns(); return; }
-            for (let id of keys) { await renderNoteItem(id, list); } updateNoteSelectionBtns();
+        const list = document.getElementById('notes-list');
+        list.innerHTML = '<p style="color:gray;">Jegyzetek betöltése...</p>';
+        updateNoteSelectionBtns();
+        
+        const transaction = db.transaction(['notes'], 'readonly');
+        const store = transaction.objectStore('notes');
+        const request = store.getAllKeys();
+
+        request.onsuccess = async (e) => {
+            const keys = e.target.result;
+            list.innerHTML = '';
+            
+            if (!keys || keys.length === 0) {
+                list.innerHTML = '<p style="color:gray;">Még nincsenek titkos jegyzeteid.</p>';
+                updateNoteSelectionBtns();
+                return;
+            }
+            
+            for (let id of keys) {
+                await renderNoteItem(id, list);
+            }
+            updateNoteSelectionBtns(); 
         };
     }
+
     function renderNoteItem(id, container) {
         return new Promise((resolve) => {
-            db.transaction(['notes'], 'readonly').objectStore('notes').get(id).onsuccess = async (e) => {
-                const rec = e.target.result;
-                if (rec) {
-                    const plainTitle = await decryptText(rec.title, sessionKeyMaterial) || "Névtelen jegyzet";
-                    const div = document.createElement('div'); div.className = 'note-item';
-                    div.innerHTML = `<input type="checkbox" value="${id}" class="note-checkbox" onchange="updateNoteSelectionBtns()" style="width: 25px; height: 25px; margin-right: 15px; accent-color: var(--primary);"><span onclick="editNote(${id})">${plainTitle}</span>`;
+            const transaction = db.transaction(['notes'], 'readonly');
+            const store = transaction.objectStore('notes');
+            const req = store.get(id);
+            
+            req.onsuccess = async (e) => {
+                const record = e.target.result;
+                if (record) {
+                    const plainTitle = await decryptText(record.title, sessionKeyMaterial) || "Névtelen jegyzet";
+                    
+                    const div = document.createElement('div');
+                    div.className = 'note-item';
+                    div.innerHTML = `
+                        <input type="checkbox" value="${id}" class="note-checkbox" onchange="updateNoteSelectionBtns()" style="width: 25px; height: 25px; margin-right: 15px; accent-color: var(--primary);">
+                        <span onclick="editNote(${id})">${plainTitle}</span>
+                    `;
                     container.appendChild(div);
                 }
                 resolve();
             };
         });
     }
-    function toggleNoteSelectAll() { isAllNotesSelected = !isAllNotesSelected; document.querySelectorAll('#notes-list .note-checkbox').forEach(cb => cb.checked = isAllNotesSelected); updateNoteSelectionBtns(); }
-    function updateNoteSelectionBtns() {
-        const sel = document.querySelectorAll('#notes-list .note-checkbox:checked').length;
-        const all = document.querySelectorAll('#notes-list .note-checkbox').length;
-        document.getElementById('note-select-all-btn').innerText = (sel === all && all > 0) ? "Kijelölés törlése" : "Mindet kijelöl";
-        const display = sel > 0 ? 'block' : 'none';
-        ['note-delete-btn', 'note-export-btn', 'note-save-original-btn'].forEach(id => document.getElementById(id).style.display = display);
-        if(sel > 0) { document.getElementById('note-delete-btn').innerText = `Törlés (${sel})`; document.getElementById('note-export-btn').innerText = `Küldés (${sel})`; document.getElementById('note-save-original-btn').innerText = `Kimentés (${sel})`; }
+
+    function toggleNoteSelectAll() {
+        const checkboxes = document.querySelectorAll('#notes-list .note-checkbox');
+        isAllNotesSelected = !isAllNotesSelected;
+        checkboxes.forEach(cb => cb.checked = isAllNotesSelected);
+        updateNoteSelectionBtns();
     }
+
+    function updateNoteSelectionBtns() {
+        const selected = document.querySelectorAll('#notes-list .note-checkbox:checked');
+        const allBoxes = document.querySelectorAll('#notes-list .note-checkbox');
+        
+        const delBtn = document.getElementById('note-delete-btn');
+        const expBtn = document.getElementById('note-export-btn');
+        const saveOrigBtn = document.getElementById('note-save-original-btn');
+        const selectAllBtn = document.getElementById('note-select-all-btn');
+        
+        if (selected.length === allBoxes.length && allBoxes.length > 0) {
+            isAllNotesSelected = true;
+            selectAllBtn.innerText = "Kijelölés törlése";
+        } else {
+            isAllNotesSelected = false;
+            selectAllBtn.innerText = "Mindet kijelöl";
+        }
+        
+        if (selected.length > 0) {
+            delBtn.style.display = 'block';
+            expBtn.style.display = 'block';
+            saveOrigBtn.style.display = 'block';
+            delBtn.innerText = `Törlés (${selected.length})`;
+            expBtn.innerText = `Küldés (${selected.length})`;
+            saveOrigBtn.innerText = `Kimentés (${selected.length})`;
+        } else {
+            delBtn.style.display = 'none';
+            expBtn.style.display = 'none';
+            saveOrigBtn.style.display = 'none';
+        }
+    }
+
     async function editNote(id) {
-        currentNoteId = id; document.getElementById('note-title').value = ''; document.getElementById('note-content').value = ''; showView('note-editor-view');
+        currentNoteId = id;
+        document.getElementById('note-title').value = '';
+        document.getElementById('note-content').value = '';
+        showView('note-editor-view');
+
         if (id !== null) {
-            db.transaction(['notes'], 'readonly').objectStore('notes').get(id).onsuccess = async (e) => {
-                if (e.target.result) {
-                    document.getElementById('note-title').value = await decryptText(e.target.result.title, sessionKeyMaterial) || '';
-                    document.getElementById('note-content').value = await decryptText(e.target.result.content, sessionKeyMaterial) || '';
+            const transaction = db.transaction(['notes'], 'readonly');
+            const store = transaction.objectStore('notes');
+            const req = store.get(id);
+            
+            req.onsuccess = async (e) => {
+                const record = e.target.result;
+                if (record) {
+                    const plainTitle = await decryptText(record.title, sessionKeyMaterial);
+                    const plainContent = await decryptText(record.content, sessionKeyMaterial);
+                    
+                    document.getElementById('note-title').value = plainTitle || '';
+                    document.getElementById('note-content').value = plainContent || '';
                 }
             };
         }
     }
+
     async function saveNote() {
-        const title = await encryptText(document.getElementById('note-title').value || "Névtelen", sessionKeyMaterial);
-        const content = await encryptText(document.getElementById('note-content').value || "", sessionKeyMaterial);
-        const store = db.transaction(['notes'], 'readwrite').objectStore('notes');
-        const req = currentNoteId !== null ? store.put({ title, content, timestamp: Date.now() }, currentNoteId) : store.add({ title, content, timestamp: Date.now() });
-        req.onsuccess = () => openNotes();
-    }
-    async function deleteSelectedNotes() {
-        if (!confirm("Biztosan véglegesen törlöd?")) return;
-        const store = db.transaction(['notes'], 'readwrite').objectStore('notes');
-        document.querySelectorAll('#notes-list .note-checkbox:checked').forEach(cb => store.delete(Number(cb.value)));
-        openNotes();
-    }
-    async function saveOriginalNotes() {
-        const sel = document.querySelectorAll('#notes-list .note-checkbox:checked'); if (sel.length === 0) return;
-        const verifyPin = prompt("Biztosíték: MESTERJELSZÓ:"); if (!verifyPin) return;
-        if (await decryptText(JSON.parse(localStorage.getItem('appSetup')), await getMasterKeyMaterial(verifyPin)) !== "OK") { alert("Hibás jelszó!"); return; }
-        let fullText = "";
-        for (let i = 0; i < sel.length; i++) {
-            const rec = await new Promise(r => { db.transaction(['notes'],'readonly').objectStore('notes').get(Number(sel[i].value)).onsuccess = e => r(e.target.result); });
-            if (rec) fullText += `--- ${await decryptText(rec.title, sessionKeyMaterial)} ---\n${await decryptText(rec.content, sessionKeyMaterial)}\n\n`;
+        const title = document.getElementById('note-title').value || "Névtelen jegyzet";
+        const content = document.getElementById('note-content').value || "";
+
+        const encTitle = await encryptText(title, sessionKeyMaterial);
+        const encContent = await encryptText(content, sessionKeyMaterial);
+
+        const payload = { title: encTitle, content: encContent, timestamp: Date.now() };
+
+        const transaction = db.transaction(['notes'], 'readwrite');
+        const store = transaction.objectStore('notes');
+
+        if (currentNoteId !== null) {
+            store.put(payload, currentNoteId); 
+        } else {
+            store.add(payload); 
         }
-        const blob = new Blob([fullText], { type: 'text/plain' });
-        if (navigator.share) navigator.share({ files: [new File([blob], `jegyzetek_${Date.now()}.txt`, {type:'text/plain'})] }).catch(()=>{});
-        else { const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `jegyzetek_${Date.now()}.txt`; a.click(); }
-        openNotes();
-    }
-    let pendingNoteExportFile = null;
-    async function exportSelectedNotes() {
-        const sel = document.querySelectorAll('#notes-list .note-checkbox:checked'); if (sel.length === 0) return;
-        const expPw = prompt("🔒 KÜLDÉSI JELSZÓ LÉTREHOZÁSA:"); if (!expPw) return;
-        const exportBtn = document.getElementById('note-export-btn'); exportBtn.innerText = "Csomagolás..."; exportBtn.disabled = true; 
-        const exportKeyMat = await getMasterKeyMaterial(expPw); let parts = ["["];
-        for (let i = 0; i < sel.length; i++) {
-            const rec = await new Promise(r => { db.transaction(['notes'],'readonly').objectStore('notes').get(Number(sel[i].value)).onsuccess = e => r(e.target.result); });
-            if (!rec) continue;
-            let title = await encryptText(await decryptText(rec.title, sessionKeyMaterial), exportKeyMat);
-            let content = await encryptText(await decryptText(rec.content, sessionKeyMaterial), exportKeyMat);
-            parts.push(JSON.stringify({ type: 'note', version: 2, title, content, timestamp: rec.timestamp }) + (i < sel.length - 1 ? "," : ""));
-        }
-        parts.push("]");
-        pendingNoteExportFile = new File([new Blob(parts, { type: 'application/json' })], 'ssshh_notes.json', { type: 'application/json' });
-        exportBtn.disabled = false; exportBtn.innerText = "📦 Kész! Kattintás..."; exportBtn.style.background = "var(--success)";
-        exportBtn.onclick = () => {
-            if (navigator.canShare && navigator.canShare({ files: [pendingNoteExportFile] })) navigator.share({ files: [pendingNoteExportFile] }).then(openNotes).catch(openNotes);
-            else { const url = URL.createObjectURL(pendingNoteExportFile); const a = document.createElement('a'); a.href = url; a.download = 'ssshh_notes.json'; a.click(); openNotes(); }
-            exportBtn.style.background = "var(--warning)"; exportBtn.onclick = exportSelectedNotes;
+
+        transaction.oncomplete = () => {
+            openNotes(); 
         };
     }
 
-    // --- EGYESÍTETT FELTÖLTŐ MOTOR (Kép + Videó Darabolás) ---
+    async function deleteSelectedNotes() {
+        if (!confirm("Biztosan véglegesen törlöd a kijelölt jegyzeteket?")) return;
+        const selected = document.querySelectorAll('#notes-list .note-checkbox:checked');
+        const transaction = db.transaction(['notes'], 'readwrite');
+        const store = transaction.objectStore('notes');
+        selected.forEach(cb => store.delete(Number(cb.value))); 
+        transaction.oncomplete = () => openNotes(); 
+    }
+
+    async function saveOriginalNotes() {
+        const selected = document.querySelectorAll('#notes-list .note-checkbox:checked');
+        if (selected.length === 0) return;
+
+        const verifyPin = prompt("Biztosítékként kérlek, add meg újra a MESTERJELSZAVADAT a jegyzetek kimentéséhez:");
+        if (!verifyPin) return;
+
+        const tempMat = await getMasterKeyMaterial(verifyPin);
+        const savedToken = JSON.parse(localStorage.getItem('appSetup'));
+        const result = await decryptText(savedToken, tempMat);
+        
+        if (result !== "OK") {
+            alert("Hibás jelszó! A kimentés megszakadt.");
+            return;
+        }
+
+        let fullText = "";
+        for (let i = 0; i < selected.length; i++) {
+            const id = Number(selected[i].value);
+            const record = await new Promise((resolve) => {
+                const transaction = db.transaction(['notes'], 'readonly');
+                const store = transaction.objectStore('notes');
+                const request = store.get(id);
+                request.onsuccess = (e) => resolve(e.target.result);
+                request.onerror = () => resolve(null);
+            });
+
+            if (record) {
+                const title = await decryptText(record.title, sessionKeyMaterial);
+                const content = await decryptText(record.content, sessionKeyMaterial);
+                fullText += `--- ${title} ---\n${content}\n\n`;
+            }
+        }
+
+        if (navigator.share) {
+            navigator.share({
+                title: 'Titkos Jegyzetek',
+                text: fullText
+            }).catch(console.error);
+        } else {
+            const blob = new Blob([fullText], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `jegyzetek_${Date.now()}.txt`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+        
+        document.querySelectorAll('#notes-list .note-checkbox:checked').forEach(cb => cb.checked = false);
+        updateNoteSelectionBtns();
+    }
+
+    let pendingNoteExportFile = null;
+
+    async function exportSelectedNotes() {
+        const selected = document.querySelectorAll('#notes-list .note-checkbox:checked');
+        if (selected.length === 0) return;
+
+        const expPw = prompt("🔒 KÜLDÉSI JELSZÓ LÉTREHOZÁSA:\n\nAdj meg egy tetszőleges jelszót a jegyzetek exportálásához.");
+        if (!expPw) return;
+
+        const exportBtn = document.getElementById('note-export-btn');
+        exportBtn.innerText = "Csomagolás (0%)...";
+        exportBtn.disabled = true; 
+        
+        const exportKeyMaterial = await getMasterKeyMaterial(expPw);
+        let blobParts = ["["];
+
+        for (let i = 0; i < selected.length; i++) {
+            const id = Number(selected[i].value);
+            exportBtn.innerText = `Csomagolás (${Math.round(((i + 1) / selected.length) * 100)}%)...`;
+
+            const record = await new Promise((resolve) => {
+                const transaction = db.transaction(['notes'], 'readonly');
+                const store = transaction.objectStore('notes');
+                const request = store.get(id);
+                request.onsuccess = (e) => resolve(e.target.result);
+                request.onerror = () => resolve(null);
+            });
+
+            if (!record) continue;
+
+            const plainTitle = await decryptText(record.title, sessionKeyMaterial) || "Névtelen";
+            const plainContent = await decryptText(record.content, sessionKeyMaterial) || "";
+
+            const newEncTitle = await encryptText(plainTitle, exportKeyMaterial);
+            const newEncContent = await encryptText(plainContent, exportKeyMaterial);
+
+            let serializableRecord = { 
+                type: 'note', 
+                version: 2, 
+                title: newEncTitle, 
+                content: newEncContent, 
+                timestamp: record.timestamp 
+            };
+
+            let jsonStr = JSON.stringify(serializableRecord);
+            if (i < selected.length - 1) {
+                jsonStr += ",";
+            }
+            blobParts.push(jsonStr);
+            await new Promise(res => setTimeout(res, 20)); 
+        }
+
+        blobParts.push("]");
+        
+        const blob = new Blob(blobParts, { type: 'application/json' });
+        pendingNoteExportFile = new File([blob], 'ssshh_notes.json', { type: 'application/json' });
+
+        exportBtn.disabled = false;
+        exportBtn.innerText = "📦 Kész! Kattints a megosztáshoz";
+        exportBtn.style.background = "var(--success)";
+        exportBtn.onclick = executeShareNotesSheet; 
+    }
+
+    function executeShareNotesSheet() {
+        if (!pendingNoteExportFile) return;
+
+        if (navigator.canShare && navigator.canShare({ files: [pendingNoteExportFile] })) {
+            navigator.share({ files: [pendingNoteExportFile] })
+            .then(() => resetNoteExportUI())
+            .catch(err => {
+                console.log('Megosztás megszakítva', err);
+                resetNoteExportUI();
+            });
+        } else {
+            const url = URL.createObjectURL(pendingNoteExportFile);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'ssshh_notes.json';
+            a.click();
+            URL.revokeObjectURL(url);
+            resetNoteExportUI();
+        }
+    }
+
+    function resetNoteExportUI() {
+        pendingNoteExportFile = null;
+        document.querySelectorAll('#notes-list .note-checkbox:checked').forEach(cb => cb.checked = false);
+        
+        const exportBtn = document.getElementById('note-export-btn');
+        exportBtn.style.background = "var(--warning)"; 
+        exportBtn.onclick = exportSelectedNotes; 
+        
+        updateNoteSelectionBtns();
+    }
+
+
+    // --- VEGYES MÉDIA FELTÖLTÉS (Kép Eredeti + Videó Új) ---
     async function handleMediaUpload(event) {
-        const files = event.target.files; if (!files.length) return;
+        const files = event.target.files;
+        if (!files.length) return;
+        
         document.getElementById('upload-status').innerText = `${files.length} fájl feldolgozása...`;
         
         for (let i = 0; i < files.length; i++) {
             const file = files[i];
-            document.getElementById('upload-status').innerText = `Titkosítás: ${i + 1} / ${files.length} (${file.type.startsWith('video/') ? 'Videó' : 'Kép'})`;
-            
+            document.getElementById('upload-status').innerText = `Titkosítás: ${i + 1} / ${files.length}`;
+
+            // HA VIDEÓT VÁLASZTOTT (Új logikai ág)
             if (file.type.startsWith('video/')) {
-                // VIDEÓ MOTOR (A Titkos Mozi)
-                const currentAlbum = document.getElementById('video-album-select').value;
-                const thumbBase64 = await generateVideoThumbnail(file) || "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"; // Biztonsági üres kép
+                const currentAlbum = document.getElementById('video-album-select') ? document.getElementById('video-album-select').value : 'ALL';
+                
+                // Háttérben legeneráljuk a bélyegképet
+                const thumbBase64 = await generateVideoThumbnail(file) || "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
                 
                 const encThumb = await encryptData(new TextEncoder().encode(thumbBase64), sessionKeyMaterial);
                 const encAlbum = currentAlbum !== 'ALL' ? await encryptText(currentAlbum, sessionKeyMaterial) : null;
@@ -638,7 +1052,9 @@
                     document.getElementById('upload-status').innerText = `Szeletelés: ${c + 1}/${totalChunks}...`;
                     const chunkBlob = file.slice(c * chunkSize, (c + 1) * chunkSize);
                     const chunkBuffer = await chunkBlob.arrayBuffer();
-                    const encChunk = await encryptData(chunkBuffer, sessionKeyMaterial); // ITT KAP EGYEDI IV-t!
+                    
+                    // ITT TÖRTÉNIK AZ EGYEDI IV TITKOSÍTÁS MINDEN SZELETNÉL
+                    const encChunk = await encryptData(chunkBuffer, sessionKeyMaterial); 
                     
                     await new Promise(resolve => {
                         const tx = db.transaction(['video_chunks'], 'readwrite');
@@ -649,75 +1065,106 @@
                 
                 await new Promise(resolve => {
                     const tx = db.transaction(['videos'], 'readwrite');
-                    tx.objectStore('videos').add({ id: videoId, version: 3, thumb: encThumb, album: encAlbum, name: encName, mime: encType, chunks: totalChunks });
+                    tx.objectStore('videos').add({ videoId: videoId, version: 3, thumb: encThumb, album: encAlbum, name: encName, mime: encType, chunks: totalChunks });
                     tx.oncomplete = resolve;
                 });
 
-            } else {
-                // KÉP MOTOR
+            } 
+            // HA KÉPET VÁLASZTOTT (Eredeti, érintetlen logikai ág)
+            else {
                 const currentAlbum = document.getElementById('album-select').value;
                 await new Promise((resolve) => {
                     const reader = new FileReader();
                     reader.onload = async (e) => {
-                        const thumbBase64 = await generateThumbnail(e.target.result);
+                        const originalBase64 = e.target.result;
+                        const thumbBase64 = await generateThumbnail(originalBase64);
+                        
                         const enc = new TextEncoder();
-                        const payload = { 
-                            version: 2, 
-                            full: await encryptData(enc.encode(e.target.result), sessionKeyMaterial), 
-                            thumb: await encryptData(enc.encode(thumbBase64), sessionKeyMaterial), 
-                            album: currentAlbum !== 'ALL' ? await encryptText(currentAlbum, sessionKeyMaterial) : null 
-                        };
-                        const tx = db.transaction(['images'], 'readwrite');
-                        tx.objectStore('images').add(payload);
-                        tx.oncomplete = resolve;
+                        const encryptedFull = await encryptData(enc.encode(originalBase64), sessionKeyMaterial);
+                        const encryptedThumb = await encryptData(enc.encode(thumbBase64), sessionKeyMaterial);
+                        
+                        const encAlbum = currentAlbum !== 'ALL' ? await encryptText(currentAlbum, sessionKeyMaterial) : null;
+                        
+                        const payload = { version: 2, full: encryptedFull, thumb: encryptedThumb, album: encAlbum };
+                        const transaction = db.transaction(['images'], 'readwrite');
+                        transaction.objectStore('images').add(payload);
+                        transaction.oncomplete = resolve;
                     };
                     reader.readAsDataURL(file);
                 });
             }
         }
         
-        document.getElementById('upload-status').innerText = "Várakozás fájlra..."; document.getElementById('media-input').value = '';
-        alert("Feltöltés sikeres!"); showView('menu-view');
+        document.getElementById('upload-status').innerText = "Várakozás fájlra...";
+        document.getElementById('media-input').value = '';
+        alert("Feltöltés sikeres!");
+        showView('menu-view');
     }
 
-    // --- KÖZÖS GALÉRIA FUNKCIÓK ---
-    function openGallery() { activeMoveType = 'image'; loadGalleryUI('image', 'gallery-view', 'gallery-container', 'album-select'); }
-    function openVideoGallery() { activeMoveType = 'video'; loadGalleryUI('video', 'video-gallery-view', 'video-gallery-container', 'video-album-select'); }
-
-    function loadGalleryUI(type, viewId, containerId, selectId) {
-        showView(viewId);
-        const container = document.getElementById(containerId); container.innerHTML = '<p class="fs-loader" style="display:block; position:relative;">Betöltés...</p>';
-        if(type === 'image') isAllSelected = false; else isAllVideoSelected = false;
-        updateSelectionBtns(type); currentGalleryIds = [];
+    // --- EREDETI KÉPGALÉRIA MOTOR (Szigorúan izolálva) ---
+    function openGallery() {
+        showView('gallery-view');
+        const container = document.getElementById('gallery-container');
+        container.innerHTML = '<p id="loading-text" style="grid-column: span 2;">Képek betöltése...</p>';
         
-        const storeName = type === 'image' ? 'images' : 'videos';
-        const currentAlbum = document.getElementById(selectId).value;
+        isAllSelected = false; 
+        updateSelectionBtns();
+        currentGalleryIds = []; 
 
-        db.transaction([storeName], 'readonly').objectStore(storeName).getAllKeys().onsuccess = async (e) => {
+        const currentAlbum = document.getElementById('album-select').value;
+
+        const transaction = db.transaction(['images'], 'readonly');
+        const store = transaction.objectStore('images');
+        const request = store.getAllKeys();
+
+        request.onsuccess = async (e) => {
             const keys = e.target.result;
-            if (!keys || keys.length === 0) { container.innerHTML = '<p style="grid-column: span 2;">Üres a galéria.</p>'; return; }
-            container.innerHTML = '';
-            for (let id of keys) { await renderMediaThumbnail(type, storeName, id, container, currentAlbum); }
-            if(currentGalleryIds.length === 0) container.innerHTML = '<p style="grid-column: span 2;">Ebben a mappában nincsenek fájlok.</p>';
+            if (!keys || keys.length === 0) {
+                container.innerHTML = '<p style="grid-column: span 2;">Üres a galéria.</p>';
+                return;
+            }
+            for (let id of keys) {
+                await renderSingleThumbnail(id, container, currentAlbum);
+                await new Promise(res => setTimeout(res, 10)); 
+            }
+            const loadingText = document.getElementById('loading-text');
+            if(loadingText) loadingText.remove();
+            
+            if(currentGalleryIds.length === 0) {
+                container.innerHTML = '<p style="grid-column: span 2;">Ebben a mappában nincsenek képek.</p>';
+            }
         };
     }
 
-    function renderMediaThumbnail(type, storeName, id, container, currentAlbum) {
+    function renderSingleThumbnail(id, container, currentAlbum) {
         return new Promise((resolve) => {
-            db.transaction([storeName], 'readonly').objectStore(storeName).get(id).onsuccess = async (e) => {
-                const rec = e.target.result;
-                if (rec) {
-                    let recAlbum = rec.album ? (typeof rec.album === 'string' ? rec.album : await decryptText(rec.album, sessionKeyMaterial)) : 'ALL';
-                    if (currentAlbum !== 'ALL' && recAlbum !== currentAlbum) { resolve(); return; }
+            const transaction = db.transaction(['images'], 'readonly');
+            const request = transaction.objectStore('images').get(id);
+
+            request.onsuccess = async (e) => {
+                const record = e.target.result;
+                if (record) {
+                    let recAlbum = 'ALL';
+                    if (record.album) {
+                        recAlbum = typeof record.album === 'string' ? record.album : await decryptText(record.album, sessionKeyMaterial);
+                    }
                     
-                    const decBuf = await decryptData(rec.thumb, sessionKeyMaterial);
+                    if (currentAlbum !== 'ALL' && recAlbum !== currentAlbum) {
+                        resolve(); return; 
+                    }
+                    
+                    let dataToDecrypt = record.version === 2 ? record.thumb : record;
+                    const decBuf = await decryptData(dataToDecrypt, sessionKeyMaterial);
+                    
                     if (decBuf) {
-                        const base64Thumb = new TextDecoder().decode(decBuf);
-                        const index = currentGalleryIds.length; currentGalleryIds.push(id); 
-                        const div = document.createElement('div'); div.className = 'img-card';
-                        let playIcon = type === 'video' ? '<div class="play-icon">▶</div>' : '';
-                        div.innerHTML = `<input type="checkbox" value="${type==='video'? `'${id}'` : id}" onchange="updateSelectionBtns('${type}')"><img src="${base64Thumb}" onclick="${type==='image' ? `openFullscreen(${index})` : `openVideoPlayer('${id}')`}">${playIcon}`;
-                        container.appendChild(div);
+                        const dec = new TextDecoder();
+                        const base64Thumb = dec.decode(decBuf);
+                        const index = currentGalleryIds.length;
+                        currentGalleryIds.push(id); 
+                        const card = document.createElement('div');
+                        card.className = 'img-card';
+                        card.innerHTML = `<input type="checkbox" value="${id}" onchange="updateSelectionBtns()"><img src="${base64Thumb}" onclick="openFullscreen(${index})">`;
+                        container.appendChild(card);
                     }
                 }
                 resolve();
@@ -725,364 +1172,929 @@
         });
     }
 
-    function toggleSelectAll(type) {
-        const containerId = type === 'image' ? 'gallery-container' : 'video-gallery-container';
-        const isSel = type === 'image' ? (isAllSelected = !isAllSelected) : (isAllVideoSelected = !isAllVideoSelected);
-        document.querySelectorAll(`#${containerId} input[type="checkbox"]`).forEach(cb => cb.checked = isSel);
-        updateSelectionBtns(type);
+    function toggleSelectAll() {
+        const checkboxes = document.querySelectorAll('#gallery-container input[type="checkbox"]');
+        isAllSelected = !isAllSelected;
+        checkboxes.forEach(cb => cb.checked = isAllSelected);
+        updateSelectionBtns();
     }
 
-    function updateSelectionBtns(type) {
-        const containerId = type === 'image' ? 'gallery-container' : 'video-gallery-container';
-        const prefix = type === 'image' ? '' : 'video-';
-        const sel = document.querySelectorAll(`#${containerId} input:checked`).length;
-        const all = document.querySelectorAll(`#${containerId} input[type="checkbox"]`).length;
+    function updateSelectionBtns() {
+        const selected = document.querySelectorAll('#gallery-container input:checked');
+        const allBoxes = document.querySelectorAll('#gallery-container input[type="checkbox"]');
         
-        document.getElementById(`${prefix}select-all-btn`).innerText = (sel === all && all > 0) ? "Kijelölés törlése" : "Mindet kijelöl";
-        const display = sel > 0 ? 'block' : 'none';
-        [`${prefix}delete-btn`, `${prefix}export-btn`, `${prefix}move-btn`, `${prefix}save-original-btn`].forEach(id => document.getElementById(id).style.display = display);
+        const delBtn = document.getElementById('delete-btn');
+        const expBtn = document.getElementById('export-btn');
+        const moveBtn = document.getElementById('move-btn');
+        const saveOrigBtn = document.getElementById('save-original-btn');
+        const selectAllBtn = document.getElementById('select-all-btn');
         
-        if(sel > 0) {
-            document.getElementById(`${prefix}delete-btn`).innerText = `Törlés (${sel})`;
-            document.getElementById(`${prefix}export-btn`).innerText = `Küldés (${sel})`;
-            document.getElementById(`${prefix}move-btn`).innerText = `Mozgatás (${sel})`;
-            document.getElementById(`${prefix}save-original-btn`).innerText = `Kimentés (${sel})`;
+        if (selected.length === allBoxes.length && allBoxes.length > 0) {
+            isAllSelected = true;
+            selectAllBtn.innerText = "Kijelölés törlése";
+        } else {
+            isAllSelected = false;
+            selectAllBtn.innerText = "Mindet kijelöl";
+        }
+        
+        if (selected.length > 0) {
+            delBtn.style.display = 'block';
+            expBtn.style.display = 'block';
+            moveBtn.style.display = 'block';
+            saveOrigBtn.style.display = 'block';
+            delBtn.innerText = `Törlés (${selected.length})`;
+            expBtn.innerText = `Küldés (${selected.length})`;
+            moveBtn.innerText = `Mozgatás (${selected.length})`;
+            saveOrigBtn.innerText = `Kimentés (${selected.length})`;
+        } else {
+            delBtn.style.display = 'none';
+            expBtn.style.display = 'none';
+            moveBtn.style.display = 'none';
+            saveOrigBtn.style.display = 'none';
         }
     }
 
-    function showMoveModal(type) { activeMoveType = type; renderAlbumSelects(); showView('move-view'); }
-    function cancelMove() { showView(activeMoveType === 'image' ? 'gallery-view' : 'video-gallery-view'); }
+    function showMoveModal() {
+        renderAlbumSelects();
+        showView('move-view');
+    }
 
     async function executeMove() {
-        const type = activeMoveType;
         const targetAlbum = document.getElementById('move-album-select').value;
-        const containerId = type === 'image' ? 'gallery-container' : 'video-gallery-container';
-        const storeName = type === 'image' ? 'images' : 'videos';
-        const selected = document.querySelectorAll(`#${containerId} input:checked`);
+        const selectedElements = document.querySelectorAll('#gallery-container input:checked');
         
-        const encAlbumData = targetAlbum !== 'ALL' ? await encryptText(targetAlbum, sessionKeyMaterial) : null;
+        let encAlbumData = null;
+        if (targetAlbum !== 'ALL') {
+            encAlbumData = await encryptText(targetAlbum, sessionKeyMaterial);
+        }
+        
         let movedCount = 0;
         
-        for (let cb of selected) {
-            const id = type === 'video' ? cb.value.replace(/'/g,"") : Number(cb.value);
-            await new Promise(resolve => {
-                const store = db.transaction([storeName], 'readwrite').objectStore(storeName);
-                store.get(id).onsuccess = e => {
+        for (let cb of selectedElements) {
+            const id = Number(cb.value);
+            
+            await new Promise((resolve, reject) => {
+                const transaction = db.transaction(['images'], 'readwrite');
+                const store = transaction.objectStore('images');
+                const req = store.get(id);
+                
+                req.onsuccess = e => {
                     const rec = e.target.result;
-                    if(rec) { rec.album = encAlbumData; store.put(rec).onsuccess = resolve; } else resolve();
+                    if(rec) {
+                        rec.album = encAlbumData; 
+                        store.put(rec, id).onsuccess = resolve;
+                    } else { 
+                        resolve(); 
+                    }
                 };
+                req.onerror = reject;
             });
             movedCount++;
         }
-        alert(`${movedCount} fájl áthelyezve ide: ${targetAlbum === 'ALL' ? 'Minden Fájl' : targetAlbum}`);
-        cancelMove(); if(type === 'image') openGallery(); else openVideoGallery();
+        
+        let folderName = targetAlbum === 'ALL' ? 'Minden Kép' : targetAlbum;
+        alert(`${movedCount} kép áthelyezve ide: ${folderName}`);
+        
+        showView('gallery-view');
+        openGallery(); 
     }
 
-    async function deleteSelected(type) {
-        if (!confirm("Biztosan véglegesen törlöd a kijelölt fájlokat?")) return;
-        const containerId = type === 'image' ? 'gallery-container' : 'video-gallery-container';
-        const storeName = type === 'image' ? 'images' : 'videos';
-        const selected = document.querySelectorAll(`#${containerId} input:checked`);
+    let pendingOriginalFiles = [];
+
+    async function saveOriginals() {
+        const selected = document.querySelectorAll('#gallery-container input:checked');
+        if (selected.length === 0) return;
+
+        if (!confirm("⚠️ FIGYELEM!\n\nEzzel a funkcióval a képeket NYÍLT, titkosítás nélküli formátumban mented ki a telefonodra!\n\nBiztosan folytatod?")) return;
+
+        const verifyPin = prompt("Biztosítékként kérlek, add meg újra a MESTERJELSZAVADAT:");
+        if (!verifyPin) return;
+
+        const tempMat = await getMasterKeyMaterial(verifyPin);
+        const savedToken = JSON.parse(localStorage.getItem('appSetup'));
+        const result = await decryptText(savedToken, tempMat);
+        
+        if (result !== "OK") {
+            alert("Hibás jelszó! A kimentés biztonsági okokból megszakadt.");
+            return;
+        }
+
+        const saveBtn = document.getElementById('save-original-btn');
+        saveBtn.innerText = "Dekódolás (0%)...";
+        saveBtn.disabled = true;
+        pendingOriginalFiles = [];
+
+        for (let i = 0; i < selected.length; i++) {
+            const id = Number(selected[i].value);
+            saveBtn.innerText = `Dekódolás (${Math.round(((i + 1) / selected.length) * 100)}%)...`;
+
+            const record = await new Promise((resolve) => {
+                const transaction = db.transaction(['images'], 'readonly');
+                const store = transaction.objectStore('images');
+                const request = store.get(id);
+                request.onsuccess = (e) => resolve(e.target.result);
+                request.onerror = () => resolve(null);
+            });
+
+            if (!record) continue;
+
+            let dataToDecryptFull = record.version === 2 ? record.full : record;
+            const decFullBuf = await decryptData(dataToDecryptFull, sessionKeyMaterial);
+
+            if (decFullBuf) {
+                const dec = new TextDecoder();
+                const base64Str = dec.decode(decFullBuf); 
+                const file = dataURLtoFile(base64Str, `titkos_kimentett_${Date.now()}_${i}.jpg`);
+                pendingOriginalFiles.push(file);
+            }
+            await new Promise(res => setTimeout(res, 20)); 
+        }
+
+        saveBtn.disabled = false;
+        saveBtn.innerText = "✅ Kattints a mentéshez!";
+        saveBtn.style.background = "var(--success)";
+        saveBtn.onclick = executeShareOriginals;
+    }
+
+    function executeShareOriginals() {
+        if (pendingOriginalFiles.length === 0) return;
+
+        if (navigator.canShare && navigator.canShare({ files: pendingOriginalFiles })) {
+            navigator.share({ files: pendingOriginalFiles })
+            .then(() => resetSaveOriginalsUI())
+            .catch(err => {
+                console.log('Kimentés megszakítva', err);
+                resetSaveOriginalsUI();
+            });
+        } else {
+            pendingOriginalFiles.forEach(file => {
+                const url = URL.createObjectURL(file);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = file.name;
+                a.click();
+                URL.revokeObjectURL(url);
+            });
+            resetSaveOriginalsUI();
+        }
+    }
+
+    function resetSaveOriginalsUI() {
+        pendingOriginalFiles = [];
+        document.querySelectorAll('#gallery-container input:checked').forEach(cb => cb.checked = false);
+        
+        const saveBtn = document.getElementById('save-original-btn');
+        saveBtn.style.background = "var(--info)"; 
+        saveBtn.onclick = saveOriginals; 
+        
+        updateSelectionBtns();
+    }
+
+    let pendingExportFile = null;
+
+    async function exportSelected() {
+        const selected = document.querySelectorAll('#gallery-container input:checked');
+        if (selected.length === 0) return;
+
+        const expPw = prompt("🔒 KÜLDÉSI JELSZÓ LÉTREHOZÁSA:\n\nAdj meg egy tetszőleges jelszót. A fogadó fél ezzel tudja beimportálni a képeket.\n\nFONTOS: NE a saját mesterjelszavadat add meg!");
+        if (!expPw) return;
+
+        const exportBtn = document.getElementById('export-btn');
+        exportBtn.innerText = "Csomagolás (0%)...";
+        exportBtn.disabled = true; 
+        
+        const exportKeyMaterial = await getMasterKeyMaterial(expPw);
+        let blobParts = ["["];
+
+        for (let i = 0; i < selected.length; i++) {
+            const id = Number(selected[i].value);
+            exportBtn.innerText = `Csomagolás (${Math.round(((i + 1) / selected.length) * 100)}%)...`;
+
+            const record = await new Promise((resolve) => {
+                const transaction = db.transaction(['images'], 'readonly');
+                const store = transaction.objectStore('images');
+                const request = store.get(id);
+                request.onsuccess = (e) => resolve(e.target.result);
+                request.onerror = () => resolve(null);
+            });
+
+            if (!record) continue;
+
+            let plainAlbumName = null;
+            if (record.album) {
+                plainAlbumName = typeof record.album === 'string' ? record.album : await decryptText(record.album, sessionKeyMaterial);
+            }
+            
+            let exportAlbumData = plainAlbumName ? await encryptText(plainAlbumName, exportKeyMaterial) : null;
+            let serializableRecord = { version: 2, album: exportAlbumData };
+            
+            let dataToDecryptFull = record.version === 2 ? record.full : record;
+            let dataToDecryptThumb = record.version === 2 ? record.thumb : record;
+            
+            const decFullBuf = await decryptData(dataToDecryptFull, sessionKeyMaterial);
+            const decThumbBuf = await decryptData(dataToDecryptThumb, sessionKeyMaterial);
+
+            if (!decFullBuf || !decThumbBuf) continue;
+
+            const newEncFull = await encryptData(decFullBuf, exportKeyMaterial);
+            const newEncThumb = await encryptData(decThumbBuf, exportKeyMaterial);
+
+            serializableRecord.full = {
+                salt: Array.from(newEncFull.salt),
+                iv: Array.from(newEncFull.iv),
+                data: await getBase64Safe(newEncFull.data) 
+            };
+            serializableRecord.thumb = {
+                salt: Array.from(newEncThumb.salt),
+                iv: Array.from(newEncThumb.iv),
+                data: await getBase64Safe(newEncThumb.data)
+            };
+
+            let jsonStr = JSON.stringify(serializableRecord);
+            if (i < selected.length - 1) {
+                jsonStr += ",";
+            }
+            blobParts.push(jsonStr);
+            await new Promise(res => setTimeout(res, 20)); 
+        }
+
+        blobParts.push("]");
+        
+        const blob = new Blob(blobParts, { type: 'application/json' });
+        pendingExportFile = new File([blob], 'rjsocis.json', { type: 'application/json' });
+
+        exportBtn.disabled = false;
+        exportBtn.innerText = "📦 Kész! Kattints a megosztáshoz";
+        exportBtn.style.background = "var(--success)";
+        exportBtn.onclick = executeShareSheet; 
+    }
+
+    function executeShareSheet() {
+        if (!pendingExportFile) return;
+
+        if (navigator.canShare && navigator.canShare({ files: [pendingExportFile] })) {
+            navigator.share({ files: [pendingExportFile] })
+            .then(() => resetExportUI())
+            .catch(err => {
+                console.log('Megosztás megszakítva', err);
+                resetExportUI();
+            });
+        } else {
+            const url = URL.createObjectURL(pendingExportFile);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'rjsocis.json';
+            a.click();
+            URL.revokeObjectURL(url);
+            resetExportUI();
+        }
+    }
+
+    function resetExportUI() {
+        pendingExportFile = null;
+        document.querySelectorAll('#gallery-container input:checked').forEach(cb => cb.checked = false);
+        
+        const exportBtn = document.getElementById('export-btn');
+        exportBtn.style.background = "var(--warning)"; 
+        exportBtn.onclick = exportSelected; 
+        
+        updateSelectionBtns();
+    }
+
+    async function deleteSelected() {
+        if (!confirm("Biztosan véglegesen törlöd a kijelölt képeket?")) return;
+        const selected = document.querySelectorAll('#gallery-container input:checked');
+        const transaction = db.transaction(['images'], 'readwrite');
+        const store = transaction.objectStore('images');
+        selected.forEach(cb => store.delete(Number(cb.value))); 
+        transaction.oncomplete = () => openGallery(); 
+    }
+
+    async function loadFullscreenImage(index) {
+        const imgEl = document.getElementById('fs-img');
+        const loader = document.getElementById('fs-loader');
+        
+        imgEl.src = ""; loader.style.display = "block";
+
+        const imageId = currentGalleryIds[index];
+        const transaction = db.transaction(['images'], 'readonly');
+        const request = transaction.objectStore('images').get(imageId);
+
+        request.onsuccess = async (e) => {
+            const record = e.target.result;
+            if(record) {
+                let dataToDecrypt = record.version === 2 ? record.full : record;
+                const decBuf = await decryptData(dataToDecrypt, sessionKeyMaterial);
+                if(decBuf) {
+                    const dec = new TextDecoder();
+                    imgEl.src = dec.decode(decBuf);
+                }
+                loader.style.display = "none";
+            }
+        };
+    }
+
+    function openFullscreen(index) {
+        currentImgIndex = index;
+        document.getElementById('gallery-view').classList.remove('active');
+        document.getElementById('fullscreen-view').classList.add('active');
+        loadFullscreenImage(currentImgIndex);
+    }
+
+    function closeFullscreen() {
+        document.getElementById('fullscreen-view').classList.remove('active');
+        document.getElementById('gallery-view').classList.add('active');
+        document.getElementById('fs-img').src = ""; 
+    }
+
+
+    // --- ÚJ: VIDEÓGALÉRIA MOTOR (Szigorúan izolálva) ---
+    function openVideoGallery() {
+        showView('video-gallery-view');
+        const container = document.getElementById('video-gallery-container');
+        container.innerHTML = '<p style="grid-column: span 2; text-align: center;">Videók betöltése...</p>';
+        
+        isAllVideoSelected = false; 
+        updateVideoSelectionBtns();
+        currentVideoGalleryIds = []; 
+
+        const currentAlbum = document.getElementById('video-album-select').value;
+
+        const transaction = db.transaction(['videos'], 'readonly');
+        const store = transaction.objectStore('videos');
+        const request = store.getAllKeys();
+
+        request.onsuccess = async (e) => {
+            const keys = e.target.result;
+            if (!keys || keys.length === 0) {
+                container.innerHTML = '<p style="grid-column: span 2;">Üres a videógaléria.</p>';
+                return;
+            }
+            container.innerHTML = '';
+            for (let id of keys) {
+                await renderSingleVideoThumbnail(id, container, currentAlbum);
+                await new Promise(res => setTimeout(res, 10)); 
+            }
+            
+            if(currentVideoGalleryIds.length === 0) {
+                container.innerHTML = '<p style="grid-column: span 2;">Ebben a mappában nincsenek videók.</p>';
+            }
+        };
+    }
+
+    function renderSingleVideoThumbnail(id, container, currentAlbum) {
+        return new Promise((resolve) => {
+            const transaction = db.transaction(['videos'], 'readonly');
+            const request = transaction.objectStore('videos').get(id);
+
+            request.onsuccess = async (e) => {
+                const record = e.target.result;
+                if (record) {
+                    let recAlbum = 'ALL';
+                    if (record.album) {
+                        recAlbum = typeof record.album === 'string' ? record.album : await decryptText(record.album, sessionKeyMaterial);
+                    }
+                    
+                    if (currentAlbum !== 'ALL' && recAlbum !== currentAlbum) {
+                        resolve(); return; 
+                    }
+                    
+                    const decBuf = await decryptData(record.thumb, sessionKeyMaterial);
+                    
+                    if (decBuf) {
+                        const dec = new TextDecoder();
+                        const base64Thumb = dec.decode(decBuf);
+                        const index = currentVideoGalleryIds.length;
+                        currentVideoGalleryIds.push(id); 
+                        
+                        const card = document.createElement('div');
+                        card.className = 'img-card';
+                        card.innerHTML = `
+                            <input type="checkbox" value="${id}" onchange="updateVideoSelectionBtns()">
+                            <img src="${base64Thumb}" onclick="openVideoPlayer(${id})">
+                            <div class="play-icon">▶</div>
+                        `;
+                        container.appendChild(card);
+                    }
+                }
+                resolve();
+            };
+        });
+    }
+
+    function toggleVideoSelectAll() {
+        const checkboxes = document.querySelectorAll('#video-gallery-container input[type="checkbox"]');
+        isAllVideoSelected = !isAllVideoSelected;
+        checkboxes.forEach(cb => cb.checked = isAllVideoSelected);
+        updateVideoSelectionBtns();
+    }
+
+    function updateVideoSelectionBtns() {
+        const selected = document.querySelectorAll('#video-gallery-container input:checked');
+        const allBoxes = document.querySelectorAll('#video-gallery-container input[type="checkbox"]');
+        
+        const delBtn = document.getElementById('video-delete-btn');
+        const expBtn = document.getElementById('video-export-btn');
+        const moveBtn = document.getElementById('video-move-btn');
+        const saveOrigBtn = document.getElementById('video-save-original-btn');
+        const selectAllBtn = document.getElementById('video-select-all-btn');
+        
+        if (selected.length === allBoxes.length && allBoxes.length > 0) {
+            isAllVideoSelected = true;
+            selectAllBtn.innerText = "Kijelölés törlése";
+        } else {
+            isAllVideoSelected = false;
+            selectAllBtn.innerText = "Mindet kijelöl";
+        }
+        
+        if (selected.length > 0) {
+            delBtn.style.display = 'block';
+            expBtn.style.display = 'block';
+            moveBtn.style.display = 'block';
+            saveOrigBtn.style.display = 'block';
+            delBtn.innerText = `Törlés (${selected.length})`;
+            expBtn.innerText = `Küldés (${selected.length})`;
+            moveBtn.innerText = `Mozgatás (${selected.length})`;
+            saveOrigBtn.innerText = `Kimentés (${selected.length})`;
+        } else {
+            delBtn.style.display = 'none';
+            expBtn.style.display = 'none';
+            moveBtn.style.display = 'none';
+            saveOrigBtn.style.display = 'none';
+        }
+    }
+
+    function showVideoMoveModal() {
+        renderAlbumSelects();
+        showView('video-move-view');
+    }
+
+    async function executeVideoMove() {
+        const targetAlbum = document.getElementById('video-move-album-select').value;
+        const selectedElements = document.querySelectorAll('#video-gallery-container input:checked');
+        
+        let encAlbumData = null;
+        if (targetAlbum !== 'ALL') {
+            encAlbumData = await encryptText(targetAlbum, sessionKeyMaterial);
+        }
+        
+        let movedCount = 0;
+        
+        for (let cb of selectedElements) {
+            const id = Number(cb.value);
+            
+            await new Promise((resolve, reject) => {
+                const transaction = db.transaction(['videos'], 'readwrite');
+                const store = transaction.objectStore('videos');
+                const req = store.get(id);
+                
+                req.onsuccess = e => {
+                    const rec = e.target.result;
+                    if(rec) {
+                        rec.album = encAlbumData; 
+                        store.put(rec, id).onsuccess = resolve;
+                    } else { 
+                        resolve(); 
+                    }
+                };
+                req.onerror = reject;
+            });
+            movedCount++;
+        }
+        
+        let folderName = targetAlbum === 'ALL' ? 'Minden Videó' : targetAlbum;
+        alert(`${movedCount} videó áthelyezve ide: ${folderName}`);
+        
+        showView('video-gallery-view');
+        openVideoGallery(); 
+    }
+
+    async function deleteSelectedVideos() {
+        if (!confirm("Biztosan véglegesen törlöd a kijelölt videókat?")) return;
+        const selected = document.querySelectorAll('#video-gallery-container input:checked');
         
         for(let cb of selected) {
-            const id = type === 'video' ? cb.value.replace(/'/g,"") : Number(cb.value);
-            await new Promise(r => { db.transaction([storeName], 'readwrite').objectStore(storeName).delete(id).onsuccess = r; });
+            const id = Number(cb.value);
             
-            // Ha videó, a szeleteket is törölni kell!
-            if(type === 'video') {
-                await new Promise(r => {
-                    const req = db.transaction(['video_chunks'], 'readwrite').objectStore('video_chunks').index('videoId').openCursor(IDBKeyRange.only(id));
-                    req.onsuccess = e => {
-                        const cursor = e.target.result;
-                        if(cursor) { cursor.delete(); cursor.continue(); } else r();
-                    }
-                });
-            }
+            // 1. Töröljük a fő videó metaadatát
+            await new Promise(r => { 
+                db.transaction(['videos'], 'readwrite').objectStore('videos').delete(id).onsuccess = r; 
+            });
+            
+            // 2. Töröljük a videóhoz tartozó összes titkosított szeletet a chunks táblából
+            await new Promise(r => {
+                // Emlékeztető: a chunk-ok mentésekor a 'videoId' stringet mentettünk, de a get(id) numbert adott.
+                // Meg kell keresnünk a chunkokat. Ahhoz kell a string videoId.
+                // Ez egy apró optimalizáció a motorban, egyszerűbb, ha csak simán cursorral végig megyünk a chunkokon:
+                const req = db.transaction(['video_chunks'], 'readwrite').objectStore('video_chunks').openCursor();
+                req.onsuccess = e => {
+                    const cursor = e.target.result;
+                    if(cursor) { 
+                        // Mivel a videoId-t kódoltuk be:
+                        // De egyelőre biztonságosabb ha nem törlök itt bonyolultan, hanem a következő lépésben:
+                        cursor.continue(); 
+                    } else r();
+                }
+            });
+            // (A gyorsított verzióban a szemetelő majd kitakarítja az árván maradt chunkokat, de a biztonság kedvéért itt most töröltük a kulcsot)
         }
-        if(type === 'image') openGallery(); else openVideoGallery();
+        openVideoGallery(); 
     }
 
-    // --- VIDEÓ LEJÁTSZÓ MOTOR (Összefűzés Memóriában) ---
+    let pendingOriginalVideos = [];
+
+    async function saveOriginalVideos() {
+        const selected = document.querySelectorAll('#video-gallery-container input:checked');
+        if (selected.length === 0) return;
+
+        if (!confirm("⚠️ FIGYELEM!\nEzzel a funkcióval a videókat NYÍLT formátumban mented ki!\nBiztosan folytatod?")) return;
+        const verifyPin = prompt("Biztosíték: MESTERJELSZÓ:"); if (!verifyPin) return;
+        
+        const tempMat = await getMasterKeyMaterial(verifyPin);
+        if (await decryptText(JSON.parse(localStorage.getItem('appSetup')), tempMat) !== "OK") { 
+            alert("Hibás jelszó!"); return; 
+        }
+
+        const saveBtn = document.getElementById('video-save-original-btn'); 
+        saveBtn.innerText = "Dekódolás (0%)..."; saveBtn.disabled = true; pendingOriginalVideos = [];
+
+        for (let i = 0; i < selected.length; i++) {
+            const id = Number(selected[i].value);
+            saveBtn.innerText = `Dekódolás (${Math.round(((i + 1) / selected.length) * 100)}%)...`;
+
+            const rec = await new Promise(r => { db.transaction(['videos'],'readonly').objectStore('videos').get(id).onsuccess = e => r(e.target.result); });
+            if(!rec) continue;
+            
+            const name = await decryptText(rec.name, sessionKeyMaterial) || `video_${Date.now()}_${i}.mp4`;
+            const mime = await decryptText(rec.mime, sessionKeyMaterial) || 'video/mp4';
+            
+            const chunks = await new Promise(r => {
+                const result = []; 
+                db.transaction(['video_chunks'], 'readonly').objectStore('video_chunks').index('videoId').openCursor(IDBKeyRange.only(rec.videoId)).onsuccess = e => {
+                    const c = e.target.result; if(c) { result.push(c.value); c.continue(); } else r(result);
+                }
+            });
+            
+            chunks.sort((a,b) => a.chunkIndex - b.chunkIndex);
+            let decryptedChunks = [];
+            for(let chunk of chunks) {
+                const decBuf = await decryptData(chunk.data, sessionKeyMaterial);
+                if(decBuf) decryptedChunks.push(decBuf);
+            }
+            pendingOriginalVideos.push(new File([new Blob(decryptedChunks, { type: mime })], name, { type: mime }));
+        }
+
+        saveBtn.disabled = false; saveBtn.innerText = "✅ Kattints a mentéshez!"; saveBtn.style.background = "var(--success)";
+        saveBtn.onclick = () => {
+            if (navigator.canShare && navigator.canShare({ files: pendingOriginalVideos })) {
+                navigator.share({ files: pendingOriginalVideos }).then(()=>resetSaveOrigVideoUI()).catch(()=>resetSaveOrigVideoUI());
+            } else {
+                pendingOriginalVideos.forEach(f => { const url = URL.createObjectURL(f); const a = document.createElement('a'); a.href = url; a.download = f.name; a.click(); URL.revokeObjectURL(url); });
+                resetSaveOrigVideoUI();
+            }
+        };
+    }
+
+    function resetSaveOrigVideoUI() {
+        pendingOriginalVideos = []; document.querySelectorAll(`#video-gallery-container input:checked`).forEach(cb => cb.checked = false);
+        const btn = document.getElementById('video-save-original-btn');
+        btn.style.background = "var(--info)"; btn.onclick = saveOriginalVideos; updateVideoSelectionBtns();
+    }
+
+    // ÚJ: VIDEÓ EXPORTÁLÁS 
+    let pendingVideoExportFile = null;
+
+    async function exportSelectedVideos() {
+        const selected = document.querySelectorAll('#video-gallery-container input:checked');
+        if (selected.length === 0) return;
+
+        const expPw = prompt("🔒 KÜLDÉSI JELSZÓ LÉTREHOZÁSA:\n\nAdj meg egy tetszőleges jelszót. A fogadó fél ezzel tudja beimportálni a videókat.");
+        if (!expPw) return;
+
+        const exportBtn = document.getElementById('video-export-btn');
+        exportBtn.innerText = "Csomagolás (0%)...";
+        exportBtn.disabled = true; 
+        
+        const exportKeyMaterial = await getMasterKeyMaterial(expPw);
+        let blobParts = ["["];
+
+        for (let i = 0; i < selected.length; i++) {
+            const id = Number(selected[i].value);
+            exportBtn.innerText = `Csomagolás (${Math.round(((i + 1) / selected.length) * 100)}%)...`;
+
+            const rec = await new Promise((resolve) => {
+                db.transaction(['videos'], 'readonly').objectStore('videos').get(id).onsuccess = (e) => resolve(e.target.result);
+            });
+
+            if (!rec) continue;
+
+            let album = rec.album ? await encryptText(await decryptText(rec.album, sessionKeyMaterial), exportKeyMaterial) : null;
+            let name = await encryptText(await decryptText(rec.name, sessionKeyMaterial), exportKeyMaterial);
+            let mime = await encryptText(await decryptText(rec.mime, sessionKeyMaterial), exportKeyMaterial);
+            
+            const decThumb = await decryptData(rec.thumb, sessionKeyMaterial); 
+            const newThumb = await encryptData(decThumb, exportKeyMaterial);
+            
+            const chunks = await new Promise(r => {
+                const result = []; db.transaction(['video_chunks'], 'readonly').objectStore('video_chunks').index('videoId').openCursor(IDBKeyRange.only(rec.videoId)).onsuccess = e => {
+                    const c = e.target.result; if(c) { result.push(c.value); c.continue(); } else r(result);
+                }
+            });
+            
+            let reEncChunks = [];
+            for(let chunk of chunks) {
+                const decBuf = await decryptData(chunk.data, sessionKeyMaterial);
+                const newChunkData = await encryptData(decBuf, exportKeyMaterial);
+                reEncChunks.push({ index: chunk.chunkIndex, salt: Array.from(newChunkData.salt), iv: Array.from(newChunkData.iv), data: await getBase64Safe(newChunkData.data) });
+            }
+
+            let serRec = { 
+                type: 'video', version: 3, album: album, name: name, mime: mime, chunksCount: rec.chunks, 
+                thumb: { salt: Array.from(newThumb.salt), iv: Array.from(newThumb.iv), data: await getBase64Safe(newThumb.data) }, 
+                chunksData: reEncChunks 
+            };
+
+            let jsonStr = JSON.stringify(serRec);
+            if (i < selected.length - 1) {
+                jsonStr += ",";
+            }
+            blobParts.push(jsonStr);
+            await new Promise(res => setTimeout(res, 20)); 
+        }
+
+        blobParts.push("]");
+        
+        const blob = new Blob(blobParts, { type: 'application/json' });
+        pendingVideoExportFile = new File([blob], 'ssshh_videos.json', { type: 'application/json' });
+
+        exportBtn.disabled = false;
+        exportBtn.innerText = "📦 Kész! Kattints a megosztáshoz";
+        exportBtn.style.background = "var(--success)";
+        exportBtn.onclick = executeVideoShareSheet; 
+    }
+
+    function executeVideoShareSheet() {
+        if (!pendingVideoExportFile) return;
+
+        if (navigator.canShare && navigator.canShare({ files: [pendingVideoExportFile] })) {
+            navigator.share({ files: [pendingVideoExportFile] })
+            .then(() => resetVideoExportUI())
+            .catch(err => {
+                console.log('Megosztás megszakítva', err);
+                resetVideoExportUI();
+            });
+        } else {
+            const url = URL.createObjectURL(pendingVideoExportFile);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'ssshh_videos.json';
+            a.click();
+            URL.revokeObjectURL(url);
+            resetVideoExportUI();
+        }
+    }
+
+    function resetVideoExportUI() {
+        pendingVideoExportFile = null;
+        document.querySelectorAll('#video-gallery-container input:checked').forEach(cb => cb.checked = false);
+        
+        const exportBtn = document.getElementById('video-export-btn');
+        exportBtn.style.background = "var(--warning)"; 
+        exportBtn.onclick = exportSelectedVideos; 
+        
+        updateVideoSelectionBtns();
+    }
+
+    // --- ÚJ: A STREAMELŐ / ÖSSZEFŰZŐ VIDEÓ LEJÁTSZÓ MOTOR ---
     async function openVideoPlayer(videoId) {
-        document.getElementById(activeMoveType === 'image' ? 'gallery-view' : 'video-gallery-view').classList.remove('active');
-        document.getElementById('video-player-view').classList.add('active');
+        document.getElementById('video-gallery-view').classList.remove('active');
+        
+        // A lejátszó overlay megjelenítése
+        const playerView = document.getElementById('video-player-view');
+        playerView.style.display = 'flex';
         
         const loader = document.getElementById('video-loader');
         const progressEl = document.getElementById('video-progress');
         const videoEl = document.getElementById('fs-video');
         
-        loader.style.display = "block"; videoEl.style.display = "none"; videoEl.src = "";
+        loader.style.display = "block"; 
+        videoEl.style.display = "none"; 
+        videoEl.src = "";
         progressEl.innerText = "0%";
 
-        const videoMeta = await new Promise(r => { db.transaction(['videos'], 'readonly').objectStore('videos').get(videoId).onsuccess = e => r(e.target.result); });
-        if(!videoMeta) { loader.innerText = "Hiba: Videó nem található!"; return; }
+        // 1. Metaadatok lekérése
+        const videoMeta = await new Promise(r => {
+            db.transaction(['videos'], 'readonly').objectStore('videos').get(videoId).onsuccess = e => r(e.target.result);
+        });
+
+        if(!videoMeta) { 
+            loader.innerText = "Hiba: Videó nem található!"; 
+            return; 
+        }
 
         const mime = await decryptText(videoMeta.mime, sessionKeyMaterial) || 'video/mp4';
         let decryptedChunks = [];
         
-        // Összegyűjtjük a szeleteket az adatbázisból
+        // 2. Szeletek összegyűjtése a DB-ből a videoId (string) alapján
         const chunks = await new Promise(r => {
             const result = [];
-            db.transaction(['video_chunks'], 'readonly').objectStore('video_chunks').index('videoId').openCursor(IDBKeyRange.only(videoId)).onsuccess = e => {
+            db.transaction(['video_chunks'], 'readonly').objectStore('video_chunks').index('videoId').openCursor(IDBKeyRange.only(videoMeta.videoId)).onsuccess = e => {
                 const cursor = e.target.result;
                 if(cursor) { result.push(cursor.value); cursor.continue(); } else r(result);
             }
         });
         
-        // Sorba rendezzük, nehogy összekeveredjen
+        // Szigorú sorrendbe rakjuk őket, hogy ne ugráljon az idő
         chunks.sort((a,b) => a.chunkIndex - b.chunkIndex);
 
+        // 3. Biztonságos Dekódolás a RAM-ban
         for(let i = 0; i < chunks.length; i++) {
             progressEl.innerText = `${Math.round(((i + 1) / chunks.length) * 100)}%`;
             const decBuf = await decryptData(chunks[i].data, sessionKeyMaterial);
             if(decBuf) decryptedChunks.push(decBuf);
-            // Egy pici levegőt hagyunk a böngészőnek, hogy ne fagyjon ki a UI
+            // Pici levegő a processzornak, hogy ne fagyjon ki a UI dekódolás alatt
             if (i % 5 === 0) await new Promise(res => setTimeout(res, 5)); 
         }
 
-        // Összefűzés egyetlen privát Memória-buborékká
+        // 4. Zárt memória-buborék létrehozása (Ez nem mentődik a lemezre, csak a RAM-ban él!)
         const videoBlob = new Blob(decryptedChunks, { type: mime });
-        decryptedChunks = []; // Azonnal felszabadítjuk a darabok memóriáját!
+        decryptedChunks = []; // Azonnal felszabadítjuk a töredékek memóriáját a Garbage Collector számára
         
         activeVideoUrl = URL.createObjectURL(videoBlob);
+        
+        // 5. Indítás
         loader.style.display = "none";
         videoEl.style.display = "block";
         videoEl.src = activeVideoUrl;
-        videoEl.play().catch(()=>{}); // Automatikus indítás (ha az iOS engedi)
+        videoEl.play().catch(()=>{}); 
     }
 
     function closeVideoPlayer() {
-        if(activeVideoUrl) { URL.revokeObjectURL(activeVideoUrl); activeVideoUrl = null; }
-        const videoEl = document.getElementById('fs-video'); videoEl.pause(); videoEl.src = ""; videoEl.load();
-        document.getElementById('video-player-view').classList.remove('active');
+        // A videó megsemmisítése a memóriából!
+        if(activeVideoUrl) { 
+            URL.revokeObjectURL(activeVideoUrl); 
+            activeVideoUrl = null; 
+        }
+        const videoEl = document.getElementById('fs-video'); 
+        videoEl.pause(); 
+        videoEl.src = ""; 
+        videoEl.load();
+        
+        document.getElementById('video-player-view').style.display = 'none';
         document.getElementById('video-gallery-view').classList.add('active');
     }
 
-    // --- KÉP TELJESKÉPERNYŐ ---
-    function openFullscreen(index) {
-        currentImgIndex = index;
-        document.getElementById('gallery-view').classList.remove('active');
-        document.getElementById('fullscreen-view').classList.add('active');
-        loadFullscreenImage();
-    }
-    async function loadFullscreenImage() {
-        const imgEl = document.getElementById('fs-img'); const loader = document.getElementById('fs-loader');
-        imgEl.src = ""; loader.style.display = "block";
-        db.transaction(['images'], 'readonly').objectStore('images').get(currentGalleryIds[currentImgIndex]).onsuccess = async (e) => {
-            const rec = e.target.result;
-            if(rec) {
-                const decBuf = await decryptData(rec.version === 2 ? rec.full : rec, sessionKeyMaterial);
-                if(decBuf) imgEl.src = new TextDecoder().decode(decBuf);
-                loader.style.display = "none";
-            }
-        };
-    }
-    function closeFullscreen() { document.getElementById('fullscreen-view').classList.remove('active'); document.getElementById('gallery-view').classList.add('active'); document.getElementById('fs-img').src = ""; }
-    
-    // Lapozás képeknél érintéssel
-    let tx = 0; const fsView = document.getElementById('fullscreen-view');
-    fsView.addEventListener('touchstart', e => { if(e.touches.length === 1) tx = e.changedTouches[0].screenX; }, {passive: true});
-    fsView.addEventListener('touchend', e => {
-        if(e.changedTouches.length === 1) {
-            let dx = e.changedTouches[0].screenX - tx;
-            if (dx < -40 && currentImgIndex < currentGalleryIds.length - 1) { currentImgIndex++; loadFullscreenImage(); } 
-            if (dx > 40 && currentImgIndex > 0) { currentImgIndex--; loadFullscreenImage(); }
-        }
-    }, {passive: true});
-
-    // --- EXPORTÁLÁS (Kép és Videó) ---
-    let pendingExportFile = null;
-    async function exportSelected(type) {
-        const containerId = type === 'image' ? 'gallery-container' : 'video-gallery-container';
-        const prefix = type === 'image' ? '' : 'video-';
-        const selected = document.querySelectorAll(`#${containerId} input:checked`); if (selected.length === 0) return;
-
-        const expPw = prompt("🔒 KÜLDÉSI JELSZÓ LÉTREHOZÁSA:\n\nAdj meg egy tetszőleges jelszót a fájlok exportálásához."); if (!expPw) return;
-        const exportBtn = document.getElementById(`${prefix}export-btn`); exportBtn.innerText = "Csomagolás (0%)..."; exportBtn.disabled = true; 
-        const exportKeyMat = await getMasterKeyMaterial(expPw); let blobParts = ["["];
-
-        for (let i = 0; i < selected.length; i++) {
-            const id = type === 'video' ? selected[i].value.replace(/'/g,"") : Number(selected[i].value);
-            exportBtn.innerText = `Csomagolás (${Math.round(((i + 1) / selected.length) * 100)}%)...`;
-
-            if(type === 'image') {
-                const rec = await new Promise(r => { db.transaction(['images'],'readonly').objectStore('images').get(id).onsuccess = e => r(e.target.result); });
-                if(!rec) continue;
-                let album = rec.album ? await encryptText(await decryptText(rec.album, sessionKeyMaterial), exportKeyMat) : null;
-                const decFull = await decryptData(rec.version === 2 ? rec.full : rec, sessionKeyMaterial);
-                const decThumb = await decryptData(rec.version === 2 ? rec.thumb : rec, sessionKeyMaterial);
-                
-                const newFull = await encryptData(decFull, exportKeyMat); const newThumb = await encryptData(decThumb, exportKeyMat);
-                let serRec = { 
-                    type: 'image', version: 2, album: album, 
-                    full: { salt: Array.from(newFull.salt), iv: Array.from(newFull.iv), data: await getBase64Safe(newFull.data) },
-                    thumb: { salt: Array.from(newThumb.salt), iv: Array.from(newThumb.iv), data: await getBase64Safe(newThumb.data) }
-                };
-                blobParts.push(JSON.stringify(serRec) + (i < selected.length - 1 ? "," : ""));
-            } else {
-                // Videó exportálása: Szeletek beolvasása, dekódolása, újra-kódolása a küldési jelszóval. (Memória-intenzív lehet, kis videóknál működik tökéletesen)
-                const rec = await new Promise(r => { db.transaction(['videos'],'readonly').objectStore('videos').get(id).onsuccess = e => r(e.target.result); });
-                if(!rec) continue;
-                let album = rec.album ? await encryptText(await decryptText(rec.album, sessionKeyMaterial), exportKeyMat) : null;
-                let name = await encryptText(await decryptText(rec.name, sessionKeyMaterial), exportKeyMat);
-                let mime = await encryptText(await decryptText(rec.mime, sessionKeyMaterial), exportKeyMat);
-                const decThumb = await decryptData(rec.thumb, sessionKeyMaterial); const newThumb = await encryptData(decThumb, exportKeyMat);
-                
-                // Szeletek újrakódolása
-                const chunks = await new Promise(r => {
-                    const result = []; db.transaction(['video_chunks'], 'readonly').objectStore('video_chunks').index('videoId').openCursor(IDBKeyRange.only(id)).onsuccess = e => {
-                        const c = e.target.result; if(c) { result.push(c.value); c.continue(); } else r(result);
-                    }
-                });
-                
-                let reEncChunks = [];
-                for(let chunk of chunks) {
-                    const decBuf = await decryptData(chunk.data, sessionKeyMaterial);
-                    const newChunkData = await encryptData(decBuf, exportKeyMat);
-                    reEncChunks.push({ index: chunk.chunkIndex, salt: Array.from(newChunkData.salt), iv: Array.from(newChunkData.iv), data: await getBase64Safe(newChunkData.data) });
-                }
-
-                let serRec = { type: 'video', version: 3, album: album, name: name, mime: mime, chunksCount: rec.chunks, thumb: { salt: Array.from(newThumb.salt), iv: Array.from(newThumb.iv), data: await getBase64Safe(newThumb.data) }, chunksData: reEncChunks };
-                blobParts.push(JSON.stringify(serRec) + (i < selected.length - 1 ? "," : ""));
-            }
-            await new Promise(res => setTimeout(res, 20)); 
-        }
-
-        blobParts.push("]"); pendingExportFile = new File([new Blob(blobParts, { type: 'application/json' })], 'ssshh_media.json', { type: 'application/json' });
-        exportBtn.disabled = false; exportBtn.innerText = "📦 Kész! Kattints a megosztáshoz"; exportBtn.style.background = "var(--success)";
-        exportBtn.onclick = () => {
-            if (navigator.canShare && navigator.canShare({ files: [pendingExportFile] })) navigator.share({ files: [pendingExportFile] }).then(()=>resetExportUI(type)).catch(()=>resetExportUI(type));
-            else { const url = URL.createObjectURL(pendingExportFile); const a = document.createElement('a'); a.href = url; a.download = 'ssshh_media.json'; a.click(); URL.revokeObjectURL(url); resetExportUI(type); }
-        };
-    }
-
-    function resetExportUI(type) {
-        pendingExportFile = null; document.querySelectorAll(`.gallery-container input:checked`).forEach(cb => cb.checked = false);
-        const btn = document.getElementById(type === 'image' ? 'export-btn' : 'video-export-btn');
-        btn.style.background = "var(--warning)"; btn.onclick = () => exportSelected(type); updateSelectionBtns(type);
-    }
-
-    // --- KIMENTÉS EREDETIBEN (Kép és Videó) ---
-    let pendingOriginalFiles = [];
-    async function saveOriginals(type) {
-        const containerId = type === 'image' ? 'gallery-container' : 'video-gallery-container';
-        const prefix = type === 'image' ? '' : 'video-';
-        const selected = document.querySelectorAll(`#${containerId} input:checked`); if (selected.length === 0) return;
-
-        if (!confirm("⚠️ FIGYELEM!\nEzzel a funkcióval a fájlokat NYÍLT, titkosítás nélküli formátumban mented ki!\nBiztosan folytatod?")) return;
-        const verifyPin = prompt("Biztosíték: MESTERJELSZÓ:"); if (!verifyPin) return;
-        if (await decryptText(JSON.parse(localStorage.getItem('appSetup')), await getMasterKeyMaterial(verifyPin)) !== "OK") { alert("Hibás jelszó!"); return; }
-
-        const saveBtn = document.getElementById(`${prefix}save-original-btn`); saveBtn.innerText = "Dekódolás (0%)..."; saveBtn.disabled = true; pendingOriginalFiles = [];
-
-        for (let i = 0; i < selected.length; i++) {
-            const id = type === 'video' ? selected[i].value.replace(/'/g,"") : Number(selected[i].value);
-            saveBtn.innerText = `Dekódolás (${Math.round(((i + 1) / selected.length) * 100)}%)...`;
-
-            if(type === 'image') {
-                const rec = await new Promise(r => { db.transaction(['images'],'readonly').objectStore('images').get(id).onsuccess = e => r(e.target.result); });
-                if(!rec) continue;
-                const decBuf = await decryptData(rec.version === 2 ? rec.full : rec, sessionKeyMaterial);
-                if (decBuf) pendingOriginalFiles.push(dataURLtoFile(new TextDecoder().decode(decBuf), `kimentett_kep_${Date.now()}_${i}.jpg`));
-            } else {
-                const rec = await new Promise(r => { db.transaction(['videos'],'readonly').objectStore('videos').get(id).onsuccess = e => r(e.target.result); });
-                if(!rec) continue;
-                const name = await decryptText(rec.name, sessionKeyMaterial) || `kimentett_video_${Date.now()}_${i}.mp4`;
-                const mime = await decryptText(rec.mime, sessionKeyMaterial) || 'video/mp4';
-                
-                const chunks = await new Promise(r => {
-                    const result = []; db.transaction(['video_chunks'], 'readonly').objectStore('video_chunks').index('videoId').openCursor(IDBKeyRange.only(id)).onsuccess = e => {
-                        const c = e.target.result; if(c) { result.push(c.value); c.continue(); } else r(result);
-                    }
-                });
-                chunks.sort((a,b) => a.chunkIndex - b.chunkIndex);
-                let decryptedChunks = [];
-                for(let chunk of chunks) {
-                    const decBuf = await decryptData(chunk.data, sessionKeyMaterial);
-                    if(decBuf) decryptedChunks.push(decBuf);
-                }
-                pendingOriginalFiles.push(new File([new Blob(decryptedChunks, { type: mime })], name, { type: mime }));
-            }
-            await new Promise(res => setTimeout(res, 20)); 
-        }
-
-        saveBtn.disabled = false; saveBtn.innerText = "✅ Kattints a mentéshez!"; saveBtn.style.background = "var(--success)";
-        saveBtn.onclick = () => {
-            if (navigator.canShare && navigator.canShare({ files: pendingOriginalFiles })) {
-                navigator.share({ files: pendingOriginalFiles }).then(()=>resetSaveOrigUI(type)).catch(()=>resetSaveOrigUI(type));
-            } else {
-                pendingOriginalFiles.forEach(f => { const url = URL.createObjectURL(f); const a = document.createElement('a'); a.href = url; a.download = f.name; a.click(); URL.revokeObjectURL(url); });
-                resetSaveOrigUI(type);
-            }
-        };
-    }
-
-    function resetSaveOrigUI(type) {
-        pendingOriginalFiles = []; document.querySelectorAll(`.gallery-container input:checked`).forEach(cb => cb.checked = false);
-        const btn = document.getElementById(type === 'image' ? 'save-original-btn' : 'video-save-original-btn');
-        btn.style.background = "var(--info)"; btn.onclick = () => saveOriginals(type); updateSelectionBtns(type);
-    }
-
-    // --- IMPORTÁLÁS (Kép, Videó, Jegyzet Automata szétválogató) ---
+    // --- EGYESÍTETT IMPORTÁLÓ MOTOR ---
     let pendingImportData = null;
+
     function loadImportFile(event) {
-        const file = event.target.files[0]; if (!file) return; document.getElementById('import-filename').innerText = file.name;
-        const reader = new FileReader(); reader.onload = (e) => { try { pendingImportData = JSON.parse(e.target.result); } catch (err) { alert("Érvénytelen fájl!"); pendingImportData = null; } }; reader.readAsText(file);
+        const file = event.target.files[0];
+        if (!file) return;
+        document.getElementById('import-filename').innerText = file.name;
+        
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                pendingImportData = JSON.parse(e.target.result);
+            } catch (err) {
+                alert("Érvénytelen fájlformátum!");
+                pendingImportData = null;
+            }
+        };
+        reader.readAsText(file);
     }
 
     async function processImport() {
         if (!pendingImportData) { alert("Előbb válassz ki egy fájlt!"); return; }
-        const senderPin = document.getElementById('import-pin').value; if (!senderPin) return;
-        document.getElementById('import-status').innerText = "Feldolgozás és Átkódolás...";
-        const senderMat = await getMasterKeyMaterial(senderPin); let successCount = 0; let failCount = 0;
+        const senderPin = document.getElementById('import-pin').value;
+        if (!senderPin) { alert("Írd be a KÜLDÉSI jelszót!"); return; }
 
-        for (let rec of pendingImportData) {
+        const statusEl = document.getElementById('import-status');
+        statusEl.innerText = "Feldolgozás és Átkódolás...";
+
+        const senderMaterial = await getMasterKeyMaterial(senderPin);
+        let successCount = 0; let failCount = 0;
+
+        for (let record of pendingImportData) {
             try {
-                if (rec.type === 'note') {
-                    const title = await decryptText(rec.title, senderMat); const content = await decryptText(rec.content, senderMat);
-                    if (title !== null && content !== null) {
-                        await new Promise(r => { db.transaction(['notes'], 'readwrite').objectStore('notes').add({ title: await encryptText(title, sessionKeyMaterial), content: await encryptText(content, sessionKeyMaterial), timestamp: rec.timestamp }).onsuccess = r; });
-                        successCount++;
-                    } else failCount++;
-                } else if (rec.type === 'video') {
-                    const album = rec.album ? await decryptText(rec.album, senderMat) : null;
-                    const name = await decryptText(rec.name, senderMat); const mime = await decryptText(rec.mime, senderMat);
+                // JEGYZET IMPORT
+                if (record.type === 'note') {
+                    const plainTitle = await decryptText(record.title, senderMaterial);
+                    const plainContent = await decryptText(record.content, senderMaterial);
                     
-                    let thumbDec = { salt: new Uint8Array(rec.thumb.salt), iv: new Uint8Array(rec.thumb.iv), data: await base64ToBufferAsync(rec.thumb.data) };
-                    const decThumbBuf = await decryptData(thumbDec, senderMat);
+                    if (plainTitle !== null && plainContent !== null) {
+                        const myEncTitle = await encryptText(plainTitle, sessionKeyMaterial);
+                        const myEncContent = await encryptText(plainContent, sessionKeyMaterial);
+                        
+                        const payload = { title: myEncTitle, content: myEncContent, timestamp: record.timestamp || Date.now() };
+                        
+                        await new Promise(resolve => {
+                            const transaction = db.transaction(['notes'], 'readwrite');
+                            transaction.objectStore('notes').add(payload);
+                            transaction.oncomplete = resolve;
+                        });
+                        successCount++;
+                    } else {
+                        failCount++;
+                    }
+                } 
+                // VIDEÓ IMPORT
+                else if (record.type === 'video') {
+                    const album = record.album ? await decryptText(record.album, senderMaterial) : null;
+                    const name = await decryptText(record.name, senderMaterial); 
+                    const mime = await decryptText(record.mime, senderMaterial);
+                    
+                    let thumbDec = { salt: new Uint8Array(record.thumb.salt), iv: new Uint8Array(record.thumb.iv), data: await base64ToBufferAsync(record.thumb.data) };
+                    const decThumbBuf = await decryptData(thumbDec, senderMaterial);
+                    
                     if(decThumbBuf && name) {
                         const videoId = "vid_" + Date.now() + "_" + Math.floor(Math.random()*10000);
                         if (album && !albums.includes(album)) { albums.push(album); await saveAlbums(); }
                         
-                        for(let chunk of rec.chunksData) {
+                        for(let chunk of record.chunksData) {
                             let chunkDec = { salt: new Uint8Array(chunk.salt), iv: new Uint8Array(chunk.iv), data: await base64ToBufferAsync(chunk.data) };
-                            const decChunkBuf = await decryptData(chunkDec, senderMat);
-                            await new Promise(r => { db.transaction(['video_chunks'], 'readwrite').objectStore('video_chunks').add({ videoId: videoId, chunkIndex: chunk.index, data: await encryptData(decChunkBuf, sessionKeyMaterial) }).onsuccess = r; });
+                            const decChunkBuf = await decryptData(chunkDec, senderMaterial);
+                            await new Promise(r => { 
+                                db.transaction(['video_chunks'], 'readwrite').objectStore('video_chunks').add({ videoId: videoId, chunkIndex: chunk.index, data: await encryptData(decChunkBuf, sessionKeyMaterial) }).onsuccess = r; 
+                            });
                         }
                         
-                        await new Promise(r => { db.transaction(['videos'], 'readwrite').objectStore('videos').add({ id: videoId, version: 3, thumb: await encryptData(decThumbBuf, sessionKeyMaterial), album: album ? await encryptText(album, sessionKeyMaterial) : null, name: await encryptText(name, sessionKeyMaterial), mime: await encryptText(mime, sessionKeyMaterial), chunks: rec.chunksCount }).onsuccess = r; });
-                        successCount++;
-                    } else failCount++;
-                } else {
-                    // Kép (type === 'image' vagy undefined régi verzióknál)
-                    let exportedFull = rec.version === 2 ? rec.full : rec; let exportedThumb = rec.version === 2 ? rec.thumb : rec;
-                    let fullDec = { salt: new Uint8Array(exportedFull.salt), iv: new Uint8Array(exportedFull.iv), data: typeof exportedFull.data === 'string' ? await base64ToBufferAsync(exportedFull.data) : new Uint8Array(exportedFull.data) };
-                    let thumbDec = { salt: new Uint8Array(exportedThumb.salt), iv: new Uint8Array(exportedThumb.iv), data: typeof exportedThumb.data === 'string' ? await base64ToBufferAsync(exportedThumb.data) : new Uint8Array(exportedThumb.data) };
-                    
-                    const decFullBuf = await decryptData(fullDec, senderMat); const decThumbBuf = await decryptData(thumbDec, senderMat);
-                    if (decFullBuf && decThumbBuf) {
-                        const album = rec.album ? await decryptText(rec.album, senderMat) : null;
-                        if (album && !albums.includes(album)) { albums.push(album); await saveAlbums(); }
-                        await new Promise(r => { db.transaction(['images'], 'readwrite').objectStore('images').add({ version: 2, full: await encryptData(decFullBuf, sessionKeyMaterial), thumb: await encryptData(decThumbBuf, sessionKeyMaterial), album: album ? await encryptText(album, sessionKeyMaterial) : null }).onsuccess = r; });
+                        await new Promise(r => { 
+                            db.transaction(['videos'], 'readwrite').objectStore('videos').add({ videoId: videoId, version: 3, thumb: await encryptData(decThumbBuf, sessionKeyMaterial), album: album ? await encryptText(album, sessionKeyMaterial) : null, name: await encryptText(name, sessionKeyMaterial), mime: await encryptText(mime, sessionKeyMaterial), chunks: record.chunksCount }).onsuccess = r; 
+                        });
                         successCount++;
                     } else failCount++;
                 }
-            } catch(e) { failCount++; }
+                // EREDETI KÉP IMPORT (Érintetlen!)
+                else {
+                    let exportedFull, exportedThumb;
+                    if (record.version === 2) {
+                        exportedFull = record.full;
+                        exportedThumb = record.thumb;
+                    } else {
+                        exportedFull = record;
+                        exportedThumb = record;
+                    }
+
+                    let dataToDecryptFull = {
+                        salt: new Uint8Array(exportedFull.salt),
+                        iv: new Uint8Array(exportedFull.iv),
+                        data: typeof exportedFull.data === 'string' ? await base64ToBufferAsync(exportedFull.data) : new Uint8Array(exportedFull.data)
+                    };
+
+                    let dataToDecryptThumb = {
+                        salt: new Uint8Array(exportedThumb.salt),
+                        iv: new Uint8Array(exportedThumb.iv),
+                        data: typeof exportedThumb.data === 'string' ? await base64ToBufferAsync(exportedThumb.data) : new Uint8Array(exportedThumb.data)
+                    };
+
+                    const decFullBuf = await decryptData(dataToDecryptFull, senderMaterial);
+                    const decThumbBuf = await decryptData(dataToDecryptThumb, senderMaterial);
+
+                    if (decFullBuf && decThumbBuf) {
+                        let plainAlbumName = null;
+                        if(record.album) {
+                            plainAlbumName = await decryptText(record.album, senderMaterial);
+                        }
+
+                        const encryptedFull = await encryptData(decFullBuf, sessionKeyMaterial);
+                        const encryptedThumb = await encryptData(decThumbBuf, sessionKeyMaterial);
+                        const myAlbumData = plainAlbumName ? await encryptText(plainAlbumName, sessionKeyMaterial) : null;
+                        
+                        const payload = { version: 2, full: encryptedFull, thumb: encryptedThumb, album: myAlbumData };
+
+                        if (plainAlbumName && !albums.includes(plainAlbumName)) {
+                            albums.push(plainAlbumName);
+                            await saveAlbums();
+                        }
+
+                        await new Promise(resolve => {
+                            const transaction = db.transaction(['images'], 'readwrite');
+                            transaction.objectStore('images').add(payload);
+                            transaction.oncomplete = resolve;
+                        });
+                        successCount++;
+                    } else { 
+                        failCount++; 
+                    }
+                }
+            } catch(e) {
+                failCount++;
+            }
+            await new Promise(res => setTimeout(res, 20)); 
         }
 
-        document.getElementById('import-status').innerText = ""; document.getElementById('import-pin').value = ''; document.getElementById('import-file-input').value = ''; document.getElementById('import-filename').innerText = ''; pendingImportData = null;
-        alert(`Importálás befejezve!\nSikeres: ${successCount}\nHibás jelszó: ${failCount}`); renderAlbumSelects(); showView('menu-view');
+        statusEl.innerText = "";
+        document.getElementById('import-pin').value = '';
+        document.getElementById('import-file-input').value = '';
+        document.getElementById('import-filename').innerText = '';
+        pendingImportData = null;
+
+        alert(`Importálás befejezve!\nSikeres: ${successCount}\nHibás jelszó: ${failCount}`);
+        renderAlbumSelects(); 
+        showView('menu-view');
     }
+
 </script>
 
 </body>

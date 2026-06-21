@@ -966,6 +966,31 @@
     function openFullscreen(index) { currentImgIndex = index; document.getElementById('gallery-view').classList.remove('active'); document.getElementById('fullscreen-view').classList.add('active'); loadFullscreenImage(currentImgIndex); }
     function closeFullscreen() { document.getElementById('fullscreen-view').classList.remove('active'); document.getElementById('gallery-view').classList.add('active'); document.getElementById('fs-img').src = ""; }
 
+    // --- LAPOZÁS A TELJES KÉPERNYŐS NÉZETBEN (balra/jobbra swipe) ---
+    function showPrevImage() { if (currentImgIndex > 0) { currentImgIndex--; loadFullscreenImage(currentImgIndex); } }
+    function showNextImage() { if (currentImgIndex < currentGalleryIds.length - 1) { currentImgIndex++; loadFullscreenImage(currentImgIndex); } }
+
+    let fsTouchStartX = 0, fsTouchStartY = 0, fsTouchStartTime = 0, fsTouchIsMulti = false;
+
+    document.getElementById('fullscreen-view').addEventListener('touchstart', (e) => {
+        fsTouchIsMulti = e.touches.length > 1;
+        if (fsTouchIsMulti) return;
+        fsTouchStartX = e.touches[0].clientX; fsTouchStartY = e.touches[0].clientY; fsTouchStartTime = Date.now();
+    }, { passive: true });
+
+    document.getElementById('fullscreen-view').addEventListener('touchend', (e) => {
+        if (fsTouchIsMulti || e.changedTouches.length !== 1) return;
+        if (window.visualViewport && window.visualViewport.scale > 1.05) return; // nagyítva van, ne lapozzon, hagyja a pant
+
+        const dx = e.changedTouches[0].clientX - fsTouchStartX;
+        const dy = e.changedTouches[0].clientY - fsTouchStartY;
+        const elapsed = Date.now() - fsTouchStartTime;
+
+        if (elapsed < 600 && Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+            dx < 0 ? showNextImage() : showPrevImage();
+        }
+    }, { passive: true });
+
 
     // --- ÚJ: VIDEÓGALÉRIA MOTOR ---
     function openVideoGallery() {

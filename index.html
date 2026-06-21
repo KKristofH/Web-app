@@ -303,12 +303,15 @@
         );
     }
 
-    async function deriveAESKey(keyMaterial, salt) {
+    const PBKDF2_ITERATIONS = 600000; // új titkosításokhoz; régi (frissítés előtti) adatoknál a tárolt iter mező, vagy ha nincs, 100000 a referencia
+    const PBKDF2_ITERATIONS_LEGACY = 100000;
+
+    async function deriveAESKey(keyMaterial, salt, iterations) {
         return await crypto.subtle.deriveKey(
-            { name: "PBKDF2", salt: salt, iterations: 100000, hash: "SHA-256" },
-            keyMaterial, 
-            { name: "AES-GCM", length: 256 }, 
-            false, 
+            { name: "PBKDF2", salt: salt, iterations: iterations, hash: "SHA-256" },
+            keyMaterial,
+            { name: "AES-GCM", length: 256 },
+            false,
             ["encrypt", "decrypt"]
         );
     }
@@ -316,9 +319,9 @@
     async function encryptData(dataBuffer, keyMaterial) {
         const salt = crypto.getRandomValues(new Uint8Array(16));
         const iv = crypto.getRandomValues(new Uint8Array(12));
-        const key = await deriveAESKey(keyMaterial, salt);
+        const key = await deriveAESKey(keyMaterial, salt, PBKDF2_ITERATIONS);
         const encrypted = await crypto.subtle.encrypt({name: "AES-GCM", iv: iv}, key, dataBuffer);
-        return { salt: salt, iv: iv, data: new Uint8Array(encrypted) }; 
+        return { salt: salt, iv: iv, data: new Uint8Array(encrypted), iter: PBKDF2_ITERATIONS };
     }
 
     async function decryptData(encryptedObj, keyMaterial) {
@@ -326,16 +329,17 @@
             const salt = new Uint8Array(encryptedObj.salt);
             const iv = new Uint8Array(encryptedObj.iv);
             const data = new Uint8Array(encryptedObj.data);
-            const key = await deriveAESKey(keyMaterial, salt);
+            const iterations = encryptedObj.iter || PBKDF2_ITERATIONS_LEGACY; // visszafelé kompatibilitás a frissítés előtt mentett adatokkal
+            const key = await deriveAESKey(keyMaterial, salt, iterations);
             const decrypted = await crypto.subtle.decrypt({name: "AES-GCM", iv: iv}, key, data);
-            return new Uint8Array(decrypted); 
+            return new Uint8Array(decrypted);
         } catch (e) { return null; }
     }
 
     async function encryptText(text, keyMaterial) {
         const enc = new TextEncoder();
         const encData = await encryptData(enc.encode(text), keyMaterial);
-        return { salt: Array.from(encData.salt), iv: Array.from(encData.iv), data: await bufferToBase64(encData.data) };
+        return { salt: Array.from(encData.salt), iv: Array.from(encData.iv), data: await bufferToBase64(encData.data), iter: encData.iter };
     }
 
     async function decryptText(encryptedObj, keyMaterial) {
@@ -343,7 +347,8 @@
             const encData = {
                 salt: new Uint8Array(encryptedObj.salt),
                 iv: new Uint8Array(encryptedObj.iv),
-                data: typeof encryptedObj.data === 'string' ? await base64ToBufferAsync(encryptedObj.data) : new Uint8Array(encryptedObj.data)
+                data: typeof encryptedObj.data === 'string' ? await base64ToBufferAsync(encryptedObj.data) : new Uint8Array(encryptedObj.data),
+                iter: encryptedObj.iter
             };
             const decBuf = await decryptData(encData, keyMaterial);
             if (!decBuf) return null;
@@ -624,7 +629,14 @@
                 if (record) {
                     const plainTitle = await decryptText(record.title, sessionKeyMaterial) || "Névtelen jegyzet";
                     const div = document.createElement('div'); div.className = 'note-item';
-                    div.innerHTML = `<input type="checkbox" value="${id}" class="note-checkbox" onchange="updateNoteSelectionBtns()" style="width: 25px; height: 25px; margin-right: 15px; accent-color: var(--primary);"><span onclick="editNote(${id})">${plainTitle}</span>`;
+                    const checkbox = document.createElement('input');
+                    checkbox.type = 'checkbox'; checkbox.value = id; checkbox.className = 'note-checkbox';
+                    checkbox.style.cssText = 'width: 25px; height: 25px; margin-right: 15px; accent-color: var(--primary);';
+                    checkbox.onchange = updateNoteSelectionBtns;
+                    const span = document.createElement('span');
+                    span.textContent = plainTitle; // biztonságos: sosem értelmezi HTML-ként (import-on keresztül érkező cím sem)
+                    span.onclick = () => editNote(id);
+                    div.appendChild(checkbox); div.appendChild(span);
                     container.appendChild(div);
                 } resolve();
             };
@@ -829,9 +841,13 @@
                     
                     const decBuf = await decryptData(record.version === 2 ? record.thumb : record, sessionKeyMaterial);
                     if (decBuf) {
-                        const index = currentGalleryIds.length; currentGalleryIds.push(id); 
+                        const decodedThumb = new TextDecoder().decode(decBuf);
+                        if (!/^data:image\/[a-zA-Z+.-]+;base64,[A-Za-z0-9+/=]+$/.test(decodedThumb)) { resolve(); return; } // gyanús/érvénytelen bélyegkép (pl. importból) - kihagyjuk
+                        const index = currentGalleryIds.length; currentGalleryIds.push(id);
                         const card = document.createElement('div'); card.className = 'img-card';
-                        card.innerHTML = `<input type="checkbox" value="${id}" onchange="updateSelectionBtns()"><img src="${new TextDecoder().decode(decBuf)}" onclick="openFullscreen(${index})">`;
+                        const checkbox = document.createElement('input'); checkbox.type = 'checkbox'; checkbox.value = id; checkbox.onchange = updateSelectionBtns;
+                        const img = document.createElement('img'); img.src = decodedThumb; img.onclick = () => openFullscreen(index);
+                        card.appendChild(checkbox); card.appendChild(img);
                         container.appendChild(card);
                     }
                 } resolve();
@@ -922,8 +938,8 @@
             const newEncThumb = await encryptData(await decryptData(record.version === 2 ? record.thumb : record, sessionKeyMaterial), exportKeyMaterial);
 
             let serRec = { version: 2, album: exportAlbumData, 
-                full: { salt: Array.from(newEncFull.salt), iv: Array.from(newEncFull.iv), data: await getBase64Safe(newEncFull.data) },
-                thumb: { salt: Array.from(newEncThumb.salt), iv: Array.from(newEncThumb.iv), data: await getBase64Safe(newEncThumb.data) }
+                full: { salt: Array.from(newEncFull.salt), iv: Array.from(newEncFull.iv), data: await getBase64Safe(newEncFull.data), iter: newEncFull.iter },
+                thumb: { salt: Array.from(newEncThumb.salt), iv: Array.from(newEncThumb.iv), data: await getBase64Safe(newEncThumb.data), iter: newEncThumb.iter }
             };
             blobParts.push(JSON.stringify(serRec) + (i < selected.length - 1 ? "," : ""));
             await new Promise(res => setTimeout(res, 20)); 
@@ -1021,9 +1037,14 @@
                     
                     const decBuf = await decryptData(record.thumb, sessionKeyMaterial);
                     if (decBuf) {
-                        currentVideoGalleryIds.push(id); 
+                        const decodedThumb = new TextDecoder().decode(decBuf);
+                        if (!/^data:image\/[a-zA-Z+.-]+;base64,[A-Za-z0-9+/=]+$/.test(decodedThumb)) { resolve(); return; } // gyanús/érvénytelen bélyegkép (pl. importból) - kihagyjuk
+                        currentVideoGalleryIds.push(id);
                         const card = document.createElement('div'); card.className = 'img-card';
-                        card.innerHTML = `<input type="checkbox" value="${id}" onchange="updateVideoSelectionBtns()"><img src="${new TextDecoder().decode(decBuf)}" onclick="openVideoPlayer(${id})"><div class="play-icon">▶</div>`;
+                        const checkbox = document.createElement('input'); checkbox.type = 'checkbox'; checkbox.value = id; checkbox.onchange = updateVideoSelectionBtns;
+                        const img = document.createElement('img'); img.src = decodedThumb; img.onclick = () => openVideoPlayer(id);
+                        const playIcon = document.createElement('div'); playIcon.className = 'play-icon'; playIcon.textContent = '▶';
+                        card.appendChild(checkbox); card.appendChild(img); card.appendChild(playIcon);
                         container.appendChild(card);
                     }
                 } resolve();
@@ -1143,10 +1164,10 @@
             let reEncChunks = [];
             for(let chunk of chunks) {
                 const newChunkData = await encryptData(await decryptData(chunk.data, sessionKeyMaterial), exportKeyMaterial);
-                reEncChunks.push({ index: chunk.chunkIndex, salt: Array.from(newChunkData.salt), iv: Array.from(newChunkData.iv), data: await getBase64Safe(newChunkData.data) });
+                reEncChunks.push({ index: chunk.chunkIndex, salt: Array.from(newChunkData.salt), iv: Array.from(newChunkData.iv), data: await getBase64Safe(newChunkData.data), iter: newChunkData.iter });
             }
 
-            let serRec = { type: 'video', version: 3, album: album, name: name, mime: mime, chunksCount: rec.chunks, thumb: { salt: Array.from(newThumb.salt), iv: Array.from(newThumb.iv), data: await getBase64Safe(newThumb.data) }, chunksData: reEncChunks };
+            let serRec = { type: 'video', version: 3, album: album, name: name, mime: mime, chunksCount: rec.chunks, thumb: { salt: Array.from(newThumb.salt), iv: Array.from(newThumb.iv), data: await getBase64Safe(newThumb.data), iter: newThumb.iter }, chunksData: reEncChunks };
             blobParts.push(JSON.stringify(serRec) + (i < selected.length - 1 ? "," : ""));
             await new Promise(res => setTimeout(res, 20)); 
         }
@@ -1241,7 +1262,7 @@
                     const name = await decryptText(record.name, senderMaterial); 
                     const mime = await decryptText(record.mime, senderMaterial);
                     
-                    let thumbDec = { salt: new Uint8Array(record.thumb.salt), iv: new Uint8Array(record.thumb.iv), data: await base64ToBufferAsync(record.thumb.data) };
+                    let thumbDec = { salt: new Uint8Array(record.thumb.salt), iv: new Uint8Array(record.thumb.iv), data: await base64ToBufferAsync(record.thumb.data), iter: record.thumb.iter };
                     const decThumbBuf = await decryptData(thumbDec, senderMaterial);
                     
                     if(decThumbBuf && name) {
@@ -1249,7 +1270,7 @@
                         if (album && !albums.includes(album)) { albums.push(album); await saveAlbums(); }
                         
                         for(let chunk of record.chunksData) {
-                            let chunkDec = { salt: new Uint8Array(chunk.salt), iv: new Uint8Array(chunk.iv), data: await base64ToBufferAsync(chunk.data) };
+                            let chunkDec = { salt: new Uint8Array(chunk.salt), iv: new Uint8Array(chunk.iv), data: await base64ToBufferAsync(chunk.data), iter: chunk.iter };
                             const decChunkBuf = await decryptData(chunkDec, senderMaterial);
                             
                             // Itt nincs egy sorba írva az await, szépen megvárja a titkosítást
@@ -1272,8 +1293,8 @@
                 }
                 else {
                     let exportedFull = record.version === 2 ? record.full : record; let exportedThumb = record.version === 2 ? record.thumb : record;
-                    let dataToDecryptFull = { salt: new Uint8Array(exportedFull.salt), iv: new Uint8Array(exportedFull.iv), data: typeof exportedFull.data === 'string' ? await base64ToBufferAsync(exportedFull.data) : new Uint8Array(exportedFull.data) };
-                    let dataToDecryptThumb = { salt: new Uint8Array(exportedThumb.salt), iv: new Uint8Array(exportedThumb.iv), data: typeof exportedThumb.data === 'string' ? await base64ToBufferAsync(exportedThumb.data) : new Uint8Array(exportedThumb.data) };
+                    let dataToDecryptFull = { salt: new Uint8Array(exportedFull.salt), iv: new Uint8Array(exportedFull.iv), data: typeof exportedFull.data === 'string' ? await base64ToBufferAsync(exportedFull.data) : new Uint8Array(exportedFull.data), iter: exportedFull.iter };
+                    let dataToDecryptThumb = { salt: new Uint8Array(exportedThumb.salt), iv: new Uint8Array(exportedThumb.iv), data: typeof exportedThumb.data === 'string' ? await base64ToBufferAsync(exportedThumb.data) : new Uint8Array(exportedThumb.data), iter: exportedThumb.iter };
 
                     const decFullBuf = await decryptData(dataToDecryptFull, senderMaterial);
                     const decThumbBuf = await decryptData(dataToDecryptThumb, senderMaterial);
